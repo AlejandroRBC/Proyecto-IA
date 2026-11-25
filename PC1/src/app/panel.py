@@ -142,7 +142,8 @@ auto = st.toggle("Actualizar automáticamente", value=True,
 def seccion_en_vivo() -> None:
     estado = dp.leer_estado_captura(config["rutas"]["estado_captura"])
     if dp.captura_activa(estado):
-        st.success(f"Captura activa en **{estado['interfaz']}** · filtro `{estado['filtro']}` · "
+        st.success(f"Captura activa con el modelo **{estado.get('modelo', 'base')}** en "
+                   f"**{estado['interfaz']}** · filtro `{estado['filtro']}` · "
                    f"desde {estado['inicio'][11:19]} · {estado['paquetes']:,} paquetes · "
                    f"{estado['flujos_activos']} flujos abiertos")
     else:
@@ -167,10 +168,12 @@ def seccion_en_vivo() -> None:
                    "igual que en el dataset, y el modelo no los evalúa.")
 
     recientes = vivo.tail(300)
-    if umbral is not None and not dp.puntajes(recientes).empty:
-        st.pyplot(dp.figura_puntajes(recientes, umbral), width="stretch")
+    umbral_vivo = dp.umbral_en_vivo(recientes, umbral)
+    if umbral_vivo is not None and not dp.puntajes(recientes).empty:
+        st.pyplot(dp.figura_puntajes(recientes, umbral_vivo), width="stretch")
         plt_cerrar()
-        st.caption("Últimos 300 flujos capturados, en orden de llegada.")
+        st.caption(f"Últimos 300 flujos capturados, en orden de llegada. La línea es el umbral del "
+                   f"modelo usado en el flujo más reciente ({umbral_vivo:.4f}).")
 
     izquierda, derecha = st.columns([3, 2])
     with izquierda:
@@ -230,6 +233,25 @@ st.info(
     "grupos densos de flujos parecidos entre sí, e Isolation Forest no los aísla como raros. Es una "
     "limitación estructural del enfoque, no un error de calibración del umbral."
 )
+
+st.subheader("Modelo de laboratorio")
+metricas_lab, _ = dp.leer_csv(config["rutas"]["reportes_laboratorio"] / "metricas.csv")
+por_tipo_lab, _ = dp.leer_csv(config["rutas"]["reportes_laboratorio"] / "metricas_por_tipo.csv")
+if metricas_lab is None:
+    st.caption("Todavía no se entrenó: `python scripts/entrenar_modelo_laboratorio.py` "
+               "(entrena con tráfico normal capturado en el laboratorio).")
+else:
+    st.caption("Entrenado solo con tráfico normal capturado en el laboratorio y evaluado con la "
+               "validación normal + los ataques de PC2. Las mismas filas se evaluaron también con "
+               "el modelo base para comparar.")
+    st.dataframe(dp.tabla_metricas_laboratorio(metricas_lab), hide_index=True, width="stretch")
+    if por_tipo_lab is not None:
+        st.dataframe(dp.tabla_por_tipo_laboratorio(por_tipo_lab), hide_index=True, width="stretch",
+                     column_config={c: st.column_config.ProgressColumn(format="percent", min_value=0.0,
+                                                                       max_value=1.0)
+                                    for c in ("base", "laboratorio")})
+        st.caption("Proporción marcada como anómala por tipo: en los ataques es el recall; "
+                   "en `normal` es la tasa de falsos positivos.")
 
 # --- Monitoreo actual --------------------------------------------------------
 st.header("Monitoreo actual")

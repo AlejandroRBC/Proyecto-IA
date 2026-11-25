@@ -15,7 +15,7 @@ from generador_trafico.configuracion import (
 )
 from generador_trafico.escaneo_puertos import armar_comando_nmap, validar_argumentos_nmap
 from generador_trafico.rafagas import generar_rafaga
-from generador_trafico.registrador import leer_ultimos_escenarios, registrar_escenario
+from generador_trafico.registrador import COLUMNAS, ip_local_hacia, leer_ultimos_escenarios, registrar_escenario
 
 
 def _config(ip="192.168.1.10", **rafagas):
@@ -157,3 +157,18 @@ def prueba_registrador_crea_csv_con_encabezado(tmp_path):
     assert [f["tipo_escenario"] for f in filas] == ["a", "b"]
     assert filas[0]["parametros"] == '{"x": 1}'
     assert leer_ultimos_escenarios(ruta, 1)[0]["tipo_escenario"] == "b"
+
+
+def prueba_registrador_respalda_csv_con_formato_anterior(tmp_path):
+    ruta = tmp_path / "escenarios.csv"
+    ruta.write_text("fecha_hora_inicio,fecha_hora_fin,tipo_escenario,parametros,ip_destino\n"
+                    "i,f,viejo,{},10.0.0.1\n", encoding="utf-8")
+    registrar_escenario(ruta, {"tipo_escenario": "nuevo", "ip_destino": "10.0.0.1", "ip_origen": "10.0.0.2"})
+    with open(ruta, newline="", encoding="utf-8") as archivo:
+        filas = list(csv.DictReader(archivo))
+    assert list(filas[0].keys()) == COLUMNAS and filas[0]["ip_origen"] == "10.0.0.2"
+    assert len(list(tmp_path.glob("escenarios.anterior-*.csv"))) == 1
+
+
+def prueba_ip_local_hacia_loopback_no_envia_nada():
+    assert ip_local_hacia("127.0.0.1") == "127.0.0.1"

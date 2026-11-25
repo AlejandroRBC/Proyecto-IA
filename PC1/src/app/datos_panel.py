@@ -255,3 +255,32 @@ def resumen_por_ip_origen(vivo: pd.DataFrame) -> pd.DataFrame:
     tabla["Proporción anómala"] = tabla["Anómalos"] / tabla["Flujos"]
     tabla = tabla.sort_values(["Flujos", "Anómalos"], ascending=False).reset_index()
     return tabla.rename(columns={"ip_origen": "IP origen"})
+
+
+def umbral_en_vivo(vivo: pd.DataFrame, por_defecto: float | None) -> float | None:
+    """Umbral del modelo con el que se evaluó el flujo más reciente (base o laboratorio)."""
+    if vivo is not None and "umbral" in vivo.columns:
+        valores = pd.to_numeric(vivo["umbral"], errors="coerce").dropna()
+        if not valores.empty:
+            return float(valores.iloc[-1])
+    return por_defecto
+
+
+# ---------------------------------------------------------------------------
+# Modelo de laboratorio (reportes/laboratorio/)
+# ---------------------------------------------------------------------------
+def tabla_metricas_laboratorio(metricas: pd.DataFrame) -> pd.DataFrame:
+    """metricas.csv del laboratorio (una fila por modelo) con nombres legibles."""
+    columnas = {"modelo": "Modelo", "precision": "Precision", "recall": "Recall", "f1": "F1",
+                "fpr": "FPR", "roc_auc": "ROC-AUC", "umbral": "Umbral", "total_flujos": "Flujos evaluados"}
+    tabla = metricas[[c for c in columnas if c in metricas.columns]].rename(columns=columnas)
+    return tabla.round(4)
+
+
+def tabla_por_tipo_laboratorio(por_tipo: pd.DataFrame) -> pd.DataFrame:
+    """Una fila por tipo (normal, escaneo, ráfaga) y una columna por modelo."""
+    tabla = por_tipo.pivot_table(index="Label", columns="modelo", values="proporcion_detectada").reset_index()
+    flujos = por_tipo.groupby("Label")["flujos"].first().rename("Flujos").reset_index()
+    tabla = flujos.merge(tabla, on="Label").rename(columns={"Label": "Tipo"})
+    tabla.columns.name = None
+    return tabla.sort_values("Flujos", ascending=False).reset_index(drop=True)

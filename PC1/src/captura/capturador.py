@@ -173,7 +173,8 @@ def capturar(
     inicio = time.time()
     estado = {
         "activo": True, "inicio": _iso(inicio), "interfaz": interfaz or "(predeterminada)",
-        "filtro": filtro, "paquetes": 0, "flujos_activos": 0, "flujos_evaluados": 0,
+        "filtro": filtro, "modelo": detector.get("nombre", "base"), "umbral": detector["umbral"],
+        "paquetes": 0, "flujos_activos": 0, "flujos_evaluados": 0,
         "anomalos": 0, "no_evaluables": 0,
     }
 

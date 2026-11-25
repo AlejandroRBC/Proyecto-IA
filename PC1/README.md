@@ -28,7 +28,8 @@ PC1/
 ├── scripts/
 │   ├── ejecutar_experimentos.py   # entrenamiento + evaluación
 │   ├── reproducir_flujos.py       # demo de monitoreo simulado
-│   └── capturar_en_vivo.py        # captura real en vivo (Npcap + scapy)
+│   ├── capturar_en_vivo.py        # captura real en vivo (Npcap + scapy)
+│   └── entrenar_modelo_laboratorio.py  # modelo con tráfico normal del laboratorio
 └── pruebas/                  # pruebas con pytest y datos simulados
 ```
 
@@ -344,6 +345,60 @@ el del laboratorio. En una prueba real, descargas HTTP normales salieron como
 anómalas, y no se espera que detecte ráfagas ni escaneos (en CICIDS2017 detecta 0 %
 de PortScan y DoS). Las alertas en vivo deben leerse con esa limitación.
 
+## Modelo de laboratorio (`scripts/entrenar_modelo_laboratorio.py`)
+
+El modelo base aprendió el tráfico "normal" de CICIDS2017 (2017), no el del
+laboratorio. El modelo de laboratorio repite la misma metodología con datos propios:
+mismas 10 características, mismos hiperparámetros, división 80/20 con semilla 42 y
+umbral al 1 % de FPR en su validación. No toca el modelo base.
+
+**Cómo se etiquetan los datos.** Cada flujo capturado se cruza con el registro de
+escenarios de PC2 (`PC2/registros/escenarios_ejecutados.csv`, que guarda la hora con
+milisegundos y la IP de PC2 en ese momento). Un flujo que involucra la IP de PC2 se
+asigna al escenario más cercano en el tiempo (hasta `laboratorio.tolerancia_segundos`,
+5 s, de margen por desfase de relojes). Si ese escenario es `escaneo_puertos` o
+`rafaga_conexiones`, el flujo es de ataque; si no, es `normal`. Las etiquetas solo
+separan entrenamiento y evaluación: el modelo nunca las recibe y **nunca entrena
+con ataques**.
+
+**Pasos:**
+
+1. Sincronizar la hora de PC1 y PC2.
+2. En PC1, capturar una sesión con todo el tráfico (15-20 min recomendados):
+   ```
+   python scripts/capturar_en_vivo.py --todo-el-trafico
+   ```
+   Mientras tanto: uso normal de PC1 (navegar, descargar) y, desde PC2, varias veces
+   la opción 1 (tráfico normal); después las opciones 2 y 3 (escaneo y ráfaga), dejando
+   unos segundos entre escenarios.
+3. Copiar `PC2/registros/escenarios_ejecutados.csv` a `PC1/datos/laboratorio/escenarios_pc2.csv`.
+4. Entrenar y comparar:
+   ```
+   python scripts/entrenar_modelo_laboratorio.py
+   ```
+   Imprime y guarda en `reportes/laboratorio/` las métricas de **ambos modelos sobre
+   las mismas filas** (validación normal + todos los ataques). El modelo queda en
+   `modelos/laboratorio/`. Se necesitan al menos 200 flujos normales evaluables
+   (`laboratorio.min_flujos_normales`).
+5. Usarlo en vivo: `python scripts/capturar_en_vivo.py --modelo laboratorio` (o
+   `captura.modelo: laboratorio`). El panel muestra qué modelo está activo y la tabla
+   comparativa en "Estado del modelo".
+
+Opciones: `--flujos a.csv b.csv` (varias sesiones; para separarlas al capturar,
+`capturar_en_vivo.py --archivo-flujos datos/laboratorio/sesion1.csv`),
+`--escenarios-pc2 ruta`, `--ip-pc2` (solo para un CSV de PC2 antiguo sin `ip_origen`)
+y `--sin-escenarios` (si en la captura no hubo ataques).
+
+**Prueba en PC1 (25/11/2026, no representativa del laboratorio):** 2,5 min de tráfico
+Wi-Fi real + PC2 ejecutado en la misma máquina contra `127.0.0.1` (ráfaga de 10 s,
+200 conexiones). El flujo completo funcionó, pero **ninguno de los dos modelos detectó
+la ráfaga** (recall 0 % en ambos). Motivo probable: cada conexión de la ráfaga, vista
+sola, es una conexión TCP corta y sin datos, muy parecida a conexiones normales (en
+loopback, idénticas a las del propio panel de Streamlit). Isolation Forest puntúa
+cada flujo por separado, y lo anómalo de una ráfaga no es un flujo, sino **cuántos**
+llegan desde la misma IP en pocos segundos. Hay que repetir la medición con PC2 en la
+red real antes de sacar conclusiones.
+
 ## Reproducibilidad
 
 Todas las semillas están fijas (`random_state=42`). Correr el pipeline dos veces da
@@ -351,6 +406,7 @@ el mismo umbral y las mismas métricas. Solo cambia `fecha_entrenamiento` en los
 
 ## Pendiente (no incluido en esta tarea)
 
-- **Modelo del laboratorio:** entrenar un Isolation Forest con tráfico normal
-  capturado en el laboratorio (`flujos_capturados.csv`), separado del modelo base.
+- **Características por ventana de tiempo** (p. ej. conexiones y puertos distintos por
+  IP de origen en los últimos N segundos): lo que haría falta para detectar ráfagas y
+  escaneos, que flujo a flujo se parecen al tráfico normal.
 - **PC2** (generador de tráfico) está en `../PC2/`.

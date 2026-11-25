@@ -20,7 +20,12 @@ from generador_trafico.configuracion import (  # noqa: E402
 )
 from generador_trafico.escaneo_puertos import escanear_puertos  # noqa: E402
 from generador_trafico.rafagas import generar_rafaga  # noqa: E402
-from generador_trafico.registrador import ahora, leer_ultimos_escenarios, registrar_escenario  # noqa: E402
+from generador_trafico.registrador import (  # noqa: E402
+    ahora,
+    ip_local_hacia,
+    leer_ultimos_escenarios,
+    registrar_escenario,
+)
 from generador_trafico.trafico_normal import construir_url_http, descargar_archivo_http, enviar_ping  # noqa: E402
 
 OPCIONES = """
@@ -55,6 +60,7 @@ def ejecutar_y_registrar(config: dict, tipo: str, funcion) -> None:
         "tipo_escenario": tipo,
         "parametros": parametros,
         "ip_destino": ip,
+        "ip_origen": ip_local_hacia(ip),
     })
     print(f"  Escenario '{tipo}' registrado ({inicio} -> {fin}).")
 

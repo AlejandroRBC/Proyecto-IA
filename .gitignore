@@ -20,3 +20,7 @@ __pycache__/
 # Registros generados por PC2
 PC2/registros/
 .pytest_cache/
+
+# Modelo de laboratorio (PC1): datos copiados de PC2 y reportes generados
+PC1/datos/laboratorio/
+PC1/reportes/laboratorio/

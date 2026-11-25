@@ -158,6 +158,20 @@ es la IP de PC1** antes de responder `s`.
 
 ---
 
+## 5b. Sesión para entrenar el modelo de laboratorio
+
+Para el modelo de laboratorio de PC1 hace falta una sesión más larga con tráfico normal:
+
+1. PC1: `python scripts/capturar_en_vivo.py --todo-el-trafico` durante 15-20 min, con
+   uso normal de PC1.
+2. PC2: varias veces la opción 1; al final, las opciones 2 y 3, con unos segundos entre
+   escenarios.
+3. Copiar `PC2/registros/escenarios_ejecutados.csv` a PC1, como
+   `PC1/datos/laboratorio/escenarios_pc2.csv`.
+4. PC1: `python scripts/entrenar_modelo_laboratorio.py` (detalles en el README de PC1).
+
+---
+
 ## 6. Problemas frecuentes
 
 | Síntoma | Causa probable | Solución |

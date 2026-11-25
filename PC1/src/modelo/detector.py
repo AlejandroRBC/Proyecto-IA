@@ -32,12 +32,34 @@ NO_EVALUABLE = "NO_EVALUABLE"
 CAMPOS_IDENTIFICACION = ["id_flujo", "ip_origen", "ip_destino", "puerto_origen", "puerto_destino"]
 
 
-def cargar_detector(config: dict | None = None) -> dict:
-    """Carga el modelo y sus metadatos una sola vez para reutilizarlos en cada predicción."""
+MODELOS_DISPONIBLES = ("base", "laboratorio")
+
+
+def rutas_modelo(config: dict, nombre: str = "base") -> tuple:
+    """(ruta del .joblib, ruta de los metadatos) del modelo ``base`` o ``laboratorio``."""
+    salida = config["archivos_salida"]
+    if nombre == "base":
+        carpeta = config["rutas"]["modelos"]
+        return carpeta / salida["modelo"], carpeta / salida["metadatos"]
+    if nombre == "laboratorio":
+        carpeta = config["rutas"]["modelos_laboratorio"]
+        return carpeta / salida["modelo_laboratorio"], carpeta / salida["metadatos_laboratorio"]
+    raise ValueError(f"Modelo desconocido: {nombre!r}. Opciones: {', '.join(MODELOS_DISPONIBLES)}.")
+
+
+def cargar_detector(config: dict | None = None, nombre: str = "base") -> dict:
+    """Carga el modelo y sus metadatos una sola vez para reutilizarlos en cada predicción.
+
+    ``nombre`` elige el modelo base (CICIDS2017) o el de laboratorio.
+    """
     config = config or cargar_configuracion()
-    dir_modelos = config["rutas"]["modelos"]
-    modelo = joblib.load(dir_modelos / config["archivos_salida"]["modelo"])
-    with open(dir_modelos / config["archivos_salida"]["metadatos"], encoding="utf-8") as f:
+    ruta_modelo, ruta_meta = rutas_modelo(config, nombre)
+    if not ruta_modelo.exists() or not ruta_meta.exists():
+        comando = ("python scripts/ejecutar_experimentos.py" if nombre == "base"
+                   else "python scripts/entrenar_modelo_laboratorio.py")
+        raise FileNotFoundError(f"No existe el modelo '{nombre}' ({ruta_modelo.name}). Entrénalo con: {comando}")
+    modelo = joblib.load(ruta_modelo)
+    with open(ruta_meta, encoding="utf-8") as f:
         metadatos = json.load(f)
 
     # orden_columnas se guarda como {nombre: posición}; se convierte a lista ordenada.
@@ -47,6 +69,7 @@ def cargar_detector(config: dict | None = None) -> dict:
     umbral = float(umbral["valor"] if isinstance(umbral, dict) else umbral)
 
     return {
+        "nombre": nombre,
         "modelo": modelo,
         "metadatos": metadatos,
         "orden_columnas": orden_columnas,

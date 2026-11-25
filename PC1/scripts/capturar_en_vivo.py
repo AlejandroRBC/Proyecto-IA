@@ -10,6 +10,8 @@ Ejemplos (desde PC1/):
     python scripts/capturar_en_vivo.py --todo-el-trafico   # todo lo que pase por la interfaz
     python scripts/capturar_en_vivo.py --listar-interfaces
     python scripts/capturar_en_vivo.py --duracion 60 --solo-alertas
+    python scripts/capturar_en_vivo.py --modelo laboratorio   # usar el modelo de laboratorio
+    python scripts/capturar_en_vivo.py --todo-el-trafico --archivo-flujos datos/laboratorio/sesion1.csv
 
 Mientras corre, el panel (streamlit run src/app/panel.py) muestra los flujos en
 la sección "Monitoreo en vivo". Se detiene con Ctrl+C.
@@ -24,7 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.captura.capturador import capturar, construir_filtro  # noqa: E402
-from src.modelo.detector import cargar_detector  # noqa: E402
+from src.modelo.detector import MODELOS_DISPONIBLES, cargar_detector  # noqa: E402
 from src.procesamiento.dataset import cargar_configuracion  # noqa: E402
 
 
@@ -39,6 +41,11 @@ def leer_argumentos(captura: dict) -> argparse.Namespace:
                    help="Detenerse después de N segundos (por defecto, hasta Ctrl+C).")
     p.add_argument("--solo-alertas", action="store_true",
                    help="En consola mostrar solo flujos anómalos y no evaluables.")
+    p.add_argument("--modelo", choices=MODELOS_DISPONIBLES, default=captura.get("modelo", "base"),
+                   help="Modelo a usar: base (CICIDS2017) o laboratorio.")
+    p.add_argument("--archivo-flujos", default=None,
+                   help="Guardar las características de los flujos en este CSV en vez de "
+                        "rutas.flujos_capturados (útil para separar sesiones de captura).")
     p.add_argument("--listar-interfaces", action="store_true", help="Mostrar interfaces y salir.")
     return p.parse_args()
 
@@ -66,14 +73,21 @@ def main() -> None:
     except ValueError as e:
         sys.exit(str(e))
 
-    detector = cargar_detector(config)
-    print(f"Detector cargado | umbral = {detector['umbral']:.6f}")
+    try:
+        detector = cargar_detector(config, args.modelo)
+    except FileNotFoundError as e:
+        sys.exit(str(e))
+    rutas = dict(config["rutas"])
+    if args.archivo_flujos:
+        rutas["flujos_capturados"] = Path(args.archivo_flujos).resolve()
+    print(f"Detector '{args.modelo}' cargado | umbral = {detector['umbral']:.6f}")
+    print(f"Características de los flujos en: {rutas['flujos_capturados']}")
     print(f"Interfaz: {args.interfaz or '(predeterminada)'} | filtro: {filtro}")
     print("Capturando... (Ctrl+C para detener)\n")
 
     try:
         conteo = capturar(
-            detector, config["rutas"], args.interfaz, filtro,
+            detector, rutas, args.interfaz, filtro,
             timeout_inactividad=float(captura.get("timeout_inactividad_segundos", 5)),
             timeout_activo=float(captura.get("timeout_activo_segundos", 120)),
             duracion=args.duracion, mostrar_normales=not args.solo_alertas,
