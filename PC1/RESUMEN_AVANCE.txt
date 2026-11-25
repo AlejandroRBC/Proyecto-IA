@@ -1,5 +1,5 @@
-CYBERGUARD AI - RESUMEN DE AVANCE (PC1)
-Fecha: 2026-11-25
+CYBERGUARD AI - RESUMEN DE AVANCE (PC1 y PC2)
+Fecha: 2026-11-25 (actualizado al final del día)
 =======================================================================
 
 QUÉ ES
@@ -7,7 +7,11 @@ QUÉ ES
 Sistema de detección de anomalías en tráfico de red con aprendizaje no supervisado
 (Isolation Forest), entrenado solo con tráfico normal y evaluado con CICIDS2017.
 No clasifica tipos de ataque, no asigna gravedad y no bloquea conexiones.
-Todo el trabajo está en PC1/. PC2/ todavía no se ha desarrollado.
+
+- PC1 (este directorio): modelo, detector, captura en vivo, panel Streamlit y análisis.
+- PC2 (../PC2): generador de tráfico de laboratorio hacia PC1, por consola.
+- IPs del laboratorio en las pruebas: PC1 = 192.168.1.7 (Wi-Fi), PC2 = 192.168.1.10.
+  La de PC2 puede cambiar (captura.ip_pc2 en configuracion.yaml o --ip-pc2).
 
 
 1. PIPELINE DE DATOS, ENTRENAMIENTO Y EVALUACIÓN  (HECHO)
@@ -47,11 +51,14 @@ de calibración del umbral.
   NaN, infinito o texto) queda como NO_EVALUABLE, sin lanzar error.
   Al modelo solo entran las 10 características. id_flujo, las IPs y los puertos
   son solo para mostrar.
+  cargar_detector(config, "base" | "laboratorio") elige el modelo.
 - src/alertas/gestor_alertas.py:
     registrar_alerta / procesar_resultado -> datos/en_vivo/alertas.csv
       (solo anomalías)
     registrar_flujo_analizado -> datos/en_vivo/flujos_analizados.csv
-      (historial completo de todos los flujos evaluados)
+      (historial completo; ahora con ip_origen, ip_destino y puerto_origen)
+  Si el historial tiene el formato anterior, se renombra a
+  flujos_analizados.anterior-<fecha>.csv en vez de mezclar encabezados.
 
 
 3. DEMO DE MONITOREO SIMULADO  (HECHO)
@@ -70,21 +77,18 @@ de calibración del umbral.
 -----------------------------------------------------------------------
 - Se corre desde PC1/ con: streamlit run src/app/panel.py
 - Secciones:
-    * Lanzar monitoreo (barra lateral): elegir archivo, filtrar por etiqueta,
-      cantidad de flujos, intervalo y semilla; botón para iniciar; botón para
-      limpiar el historial (con confirmación).
-    * Estado del modelo: tarjetas de métricas, tabla por tipo ordenada por recall
-      y texto sobre la limitación conocida.
-    * Monitoreo actual: conteos, gráfica de puntajes con la línea del umbral
-      oficial, y las últimas alertas.
-    * Explorador de umbral: umbral hipotético recalculado en memoria. Es solo
-      visualización y no cambia el sistema.
-- El panel no carga el modelo: lee los CSV y lanza la demo como subproceso.
-- Para la exposición:
-    1) Limpiar el historial.
-    2) Wednesday con "Todas" (~60 flujos normales).
-    3) Wednesday + Heartbleed (11 de 11 alertas).
-    4) Opcional: Thursday-Infilteration + Infiltration.
+    * Lanzar monitoreo (barra lateral): demo con los CSV del dataset (archivo,
+      etiqueta, cantidad, intervalo, semilla) y botón para limpiar el historial.
+    * Monitoreo en vivo (NUEVO): se actualiza solo cada 2 s (st.fragment). Muestra
+      si la captura está activa y con qué modelo, conteos, puntajes de los últimos
+      300 flujos (con el umbral del modelo en uso), últimos flujos con IPs,
+      resumen por IP de origen y alertas en vivo.
+    * Estado del modelo: métricas, tabla por tipo, limitación conocida y, si existe,
+      la comparación modelo base vs modelo de laboratorio.
+    * Monitoreo actual: conteos, gráfica de puntajes y últimas alertas.
+    * Explorador de umbral: umbral hipotético en memoria (solo visualización).
+- El panel no carga el modelo: lee los CSV. La captura corre aparte.
+- Requiere streamlit >= 1.37.
 
 
 5. EXPERIMENTO log1p  (HECHO, PROPUESTO PARA DESCARTE)
@@ -114,11 +118,111 @@ de calibración del umbral.
   Comparación en reportes/comparacion_auditoria_duplicados.md.
 
 
-7. PRUEBAS
+7. PC2: GENERADOR DE TRÁFICO DE LABORATORIO  (HECHO)
 -----------------------------------------------------------------------
-- pytest (desde PC1/): 38 pruebas, todas pasan. Cubren limpieza, carga, log1p,
-  detector, gestor de alertas y la lógica del panel. Usan datos sintéticos, no los
+- Carpeta ../PC2. Consola: python menu.py. Guía paso a paso: PC2/GUIA_DEMO.md.
+- Seguridad: todo el tráfico va solo a red.ip_destino_pc1 (configuracion.yaml).
+  Si falta o no es válida, no se ejecuta nada. Solo IPs privadas o 127.0.0.1.
+  Antes de cada escenario de ataque muestra la IP y pide confirmación s/n.
+  Cada ráfaga se corta a los 30 s configurados (el programa no acepta más de 60).
+  nmap solo admite opciones; no se pueden añadir otros objetivos.
+- Menú:
+    1. Tráfico normal: ping + descarga HTTP opcional.
+    2. Escaneo de puertos con nmap -sT (nmap se instala aparte).
+    3. Ráfaga de conexiones TCP (socket estándar, sin privilegios).
+    4. Escenario mixto: normal -> anómalo -> normal, 5 min (40/20/40 %).
+    5. Escenario aleatorio: tráfico normal continuo y episodios anómalos en
+       momentos, duraciones y tipos al azar (descargas, descargas + ráfaga, solo
+       ráfaga). Semilla reproducible y plan visible antes de confirmar.
+    6. Ver últimos escenarios registrados.  7. Salir.
+- Fase / episodio anómalo: descargas en paralelo y seguidas de grande.bin (256 KB)
+  y, según el caso, ráfagas. Se eligieron las descargas de 256 KB porque, al
+  calibrar con capturas reales, el modelo base marcó el 100 % de ellas y el 0 %
+  de las descargas pequeñas.
+- Antes de los escenarios 4 y 5 comprueba (con HEAD, sin descargar) que PC1 sirve
+  prueba.txt y un grande.bin de al menos 100 KB.
+- Registro: registros/escenarios_ejecutados.csv (fuera de git) con hora de inicio
+  y fin en milisegundos, tipo, parámetros, IP destino e IP de PC2 (ip_origen).
+
+
+8. CAPTURA EN VIVO EN PC1  (HECHO)
+-----------------------------------------------------------------------
+- python scripts/capturar_en_vivo.py. Requiere Npcap y scapy. Funciona sin
+  administrador si Npcap se instaló sin restringir el acceso.
+  Opciones: --interfaz (Wi-Fi), --ip-pc2, --todo-el-trafico, --duracion,
+  --solo-alertas, --modelo base|laboratorio, --archivo-flujos, --listar-interfaces.
+- src/captura/flujos.py: agrupa paquetes en flujos bidireccionales y calcula las
+  10 características con las convenciones de CICFlowMeter (microsegundos, bytes
+  de carga útil, cierre por FIN/RST o por 5 s de inactividad). Es una aproximación
+  propia, no CICFlowMeter.
+- src/captura/capturador.py: evalúa por lotes cada flujo cerrado y escribe
+  alertas.csv, flujos_analizados.csv, flujos_capturados.csv (características
+  crudas) y estado_captura.json (lo lee el panel).
+- Un flujo de un solo paquete tiene duración 0 y tasas infinitas, igual que en el
+  dataset, y queda NO_EVALUABLE.
+- scripts/servidor_demo.py: sirve prueba.txt y grande.bin en los puertos 8000 y
+  8080 (reemplaza levantar dos `python -m http.server` a mano).
+
+
+9. MODELO DE LABORATORIO  (HECHO, SIN ENTRENAR CON DATOS REALES TODAVÍA)
+-----------------------------------------------------------------------
+- python scripts/entrenar_modelo_laboratorio.py. Misma metodología que el modelo
+  base (10 características, hiperparámetros, división 80/20, semilla 42, umbral al
+  1 % de FPR), pero con tráfico normal capturado en el laboratorio.
+- Etiqueta los flujos cruzándolos con el CSV de escenarios de PC2: cada flujo de
+  PC2 se asigna al escenario más cercano en el tiempo (tolerancia 5 s). Entrena
+  solo con los normales y compara con el modelo base sobre las mismas filas.
+- Salidas en modelos/laboratorio/ y reportes/laboratorio/ (fuera de git).
+- Prueba en PC1 por loopback (no representativa): ninguno de los dos modelos
+  detectó la ráfaga. Falta una sesión real de 15-20 min para entrenarlo.
+
+
+10. SESIÓN REAL PC1 <-> PC2 Y SU ANÁLISIS  (HECHO)
+-----------------------------------------------------------------------
+- python scripts/analizar_sesion.py guarda una sesión en
+  reportes/sesiones/<nombre>/ (sí se sube a git): flujos.csv, resumen por tipo,
+  metricas.json, puntajes.png y RESUMEN.md. Clasifica cada flujo por su forma
+  (puerto y bytes), no por la hora, e incluye los flujos capturados "al revés".
+- Sesión real del 25/11/2026, 16:40-16:57 (escenario mixto, Wi-Fi, modelo base):
+  reportes/sesiones/2026-11-25_escenario_mixto/
+
+    Tráfico de PC2                       Flujos   Marcados anómalos
+    Descarga pequeña (normal)               297     0 %
+    Ping                                      5     0 %
+    Otro (SSDP, NetBIOS)                     15     0 %
+    Descarga grande (ataque simulado)     1,642    96.2 %
+    Ráfaga                                2,771     0 %
+
+  Ningún falso positivo en el tráfico normal (precision 100 %, FPR 0 %). Las
+  descargas grandes no marcadas (3.8 %) quedan justo por encima del umbral.
+  La ráfaga no se detecta, igual que PortScan/DoS en CICIDS2017.
+- Prueba del escenario aleatorio por loopback (120 s, semilla 3, 3 episodios):
+  descargas grandes 311 de 311 anómalas, 0 falsos positivos, 0 alertas fuera de
+  los episodios.
+
+
+11. INCIDENCIAS RESUELTAS DURANTE LAS PRUEBAS
+-----------------------------------------------------------------------
+- La captura se caía con [WinError 5] en estado_captura.tmp: el panel tenía el
+  archivo abierto y Windows no deja renombrarlo. Ahora se reintenta y, si no, se
+  escribe en el sitio; un fallo ahí nunca detiene la captura.
+- Alertas aisladas en plena fase normal: eran la verificación previa de PC2, que
+  descargaba grande.bin completo. Ahora solo pide el tamaño (HEAD).
+- Etiquetado del modelo de laboratorio: un ping o una descarga justo antes o
+  después de una ráfaga se etiquetaba como ataque. Ahora se asigna al escenario
+  más cercano en el tiempo.
+- Fechas con y sin milisegundos se descartaban en silencio al leerlas: se usa
+  format="ISO8601".
+
+
+12. PRUEBAS
+-----------------------------------------------------------------------
+- PC1 (pytest desde PC1/): 69 pruebas, todas pasan. Limpieza, carga, log1p,
+  detector, alertas, panel, captura (flujos, conversión de paquetes en memoria,
+  estado), modelo de laboratorio y análisis de sesiones. No usan la red ni los
   CSV reales.
+- PC2 (pytest desde PC2/): 110 pruebas, todas pasan. Configuración y límites de
+  seguridad, nmap, registro, escenario mixto y aleatorio con red simulada.
 
 
 CÓMO EJECUTAR (desde PC1/)
@@ -127,27 +231,35 @@ CÓMO EJECUTAR (desde PC1/)
   .venv\Scripts\activate
   pip install -r requirements.txt
   python scripts/ejecutar_experimentos.py      # verificar, entrenar y evaluar
-  python scripts/reproducir_flujos.py          # demo por consola
-  streamlit run src/app/panel.py               # panel
+  python scripts/reproducir_flujos.py          # demo con el dataset, por consola
   pytest                                       # pruebas
 Los CSV de CICIDS2017 deben estar en ../Datasets (no se suben a git).
+
+Demo en vivo con PC2 (detalle en PC2/GUIA_DEMO.md):
+  PC1:  python scripts/servidor_demo.py
+        python scripts/capturar_en_vivo.py
+        streamlit run src/app/panel.py          # http://localhost:8501
+  PC2:  python menu.py -> opción 4 (mixto) o 5 (aleatorio)
+  PC1 al terminar:
+        python scripts/analizar_sesion.py --desde "<hora de inicio>" --nombre <nombre>
 
 
 QUÉ NO SE SUBE A GIT
 -----------------------------------------------------------------------
-Datasets/, PC1/modelos/ (incluido log1p), PC1/datos/procesados/ y en_vivo/,
-PC1/reportes/figuras/, PC1/reportes/log1p/ y los entornos virtuales.
+Datasets/, PC1/modelos/ (incluidos log1p y laboratorio), PC1/datos/procesados/,
+en_vivo/ y laboratorio/, PC1/reportes/figuras/, log1p/ y laboratorio/,
+PC2/registros/ y los entornos virtuales.
+Sí se suben las sesiones guardadas en PC1/reportes/sesiones/.
 Para regenerar el modelo: python scripts/ejecutar_experimentos.py
 
 
 PENDIENTE
 -----------------------------------------------------------------------
-- Captura real con CICFlowMeter/Npcap (src/captura/). Reemplazaría a
-  reproducir_flujos.py como fuente de flujos, usando las mismas funciones del
-  detector y llenando las IPs.
-- PC2.
+- Sesión real de 15-20 min para entrenar y medir el modelo de laboratorio.
+- Ráfagas y escaneos: se necesitan características por ventana de tiempo (p. ej.
+  conexiones o puertos distintos por IP de origen en los últimos N segundos).
+  Flujo a flujo se parecen al tráfico normal y ningún ajuste del umbral lo cambia.
 - Decidir formalmente sobre log1p y, si se quiere, repetirlo con el criterio de
   duplicados corregido.
-- Si se quiere detectar ataques de volumen, hace falta un cambio de enfoque
-  (otras características u otro algoritmo). Isolation Forest con estas 10
-  características no los detecta.
+- Escaneo con nmap: la sesión guardada no incluye ningún escaneo; falta medirlo
+  contra la captura en vivo y guardarlo con analizar_sesion.py.
