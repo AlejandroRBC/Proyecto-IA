@@ -29,7 +29,8 @@ PC1/
 │   ├── ejecutar_experimentos.py   # entrenamiento + evaluación
 │   ├── reproducir_flujos.py       # demo de monitoreo simulado
 │   ├── capturar_en_vivo.py        # captura real en vivo (Npcap + scapy)
-│   └── entrenar_modelo_laboratorio.py  # modelo con tráfico normal del laboratorio
+│   ├── entrenar_modelo_laboratorio.py  # modelo con tráfico normal del laboratorio
+│   └── servidor_demo.py           # servidor HTTP de la demo con PC2 (puertos 8000 y 8080)
 └── pruebas/                  # pruebas con pytest y datos simulados
 ```
 
@@ -334,6 +335,12 @@ Configuración en `configuracion.yaml`, sección `captura`: `interfaz` (`Wi-Fi`)
 
 Si `flujos_analizados.csv` tenía el formato anterior (sin columnas de IP), se
 renombra a `flujos_analizados.anterior-<fecha>.csv` y se empieza uno nuevo.
+
+**Servidor para la demo:** `python scripts/servidor_demo.py` sirve `prueba.txt` y
+`grande.bin` (256 KB) en los puertos 8000 y 8080, que es lo que usan los escenarios de PC2,
+incluido el escenario mixto de la presentación (opción 4 del menú de PC2; guion en
+`PC2/GUIA_DEMO.md`). En una prueba por loopback, el modelo base marcó como anómalas el 100 %
+de las descargas de 256 KB de la fase anómala y el 0 % del tráfico de las fases normales.
 
 **Panel:** con la captura corriendo en una terminal, `streamlit run src/app/panel.py`
 en otra. La sección **Monitoreo en vivo** se actualiza sola cada 2 s y muestra el

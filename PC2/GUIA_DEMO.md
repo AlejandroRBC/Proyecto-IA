@@ -13,6 +13,43 @@ PC2 genera tráfico **solo hacia PC1** y anota en un CSV cuándo lo hizo.
 
 ---
 
+## 0. Guion corto para la presentación (escenario mixto, 5 min)
+
+Es la forma recomendada de presentar: el panel muestra primero tráfico normal, después una
+oleada de alertas y luego vuelve a la normalidad.
+
+**PC1** (tres terminales, desde `PC1/`):
+
+```
+python scripts/servidor_demo.py          # sirve prueba.txt y grande.bin en 8000 y 8080
+python scripts/capturar_en_vivo.py       # captura el tráfico de PC2 y lo evalúa
+streamlit run src/app/panel.py           # abrir http://localhost:8501 → "Monitoreo en vivo"
+```
+
+Si `servidor_demo.py` dice que el puerto está ocupado, cerrar los `python -m http.server`
+que hubiera abiertos. Comprobar que `captura.ip_pc2` en `PC1/configuracion.yaml` es la IP
+actual de PC2.
+
+**PC2** (desde `PC2/`): `python menu.py` → opción **4** → Enter (300 s) → `s`.
+
+| Momento | Qué hace PC2 | Qué debe verse en el panel de PC1 |
+|---|---|---|
+| 0:00 – 2:00 | Fase normal: ping + descarga de `prueba.txt` cada 1-4 s | Flujos NORMAL, ninguna alerta nueva |
+| 2:00 – 3:00 | **Fase anómala**: 3 descargas en paralelo y seguidas de `grande.bin` (256 KB) + ráfagas de conexiones | Suben los **Anómalos** y se llena **Alertas en vivo** con flujos de PC2 al puerto 8000 |
+| 3:00 – 5:00 | Fase normal otra vez | Dejan de aparecer alertas |
+
+En la consola de PC2 se ve la fase actual y los segundos que quedan. Ctrl+C lo detiene, y
+las fases ya hechas quedan registradas.
+
+**Resultado medido** (prueba en PC1 por loopback, 60 s, modelo base): fases normales 100 %
+NORMAL (22 flujos), descargas de la fase anómala 100 % ANOMALO (165 de 165), ráfaga 0 %
+detectada (240 flujos NORMAL). La ráfaga se incluye porque es el "ataque" del proyecto, pero
+conexión a conexión parece una conexión normal: es la limitación conocida del modelo y
+conviene explicarla en la presentación. Las alertas las producen las transferencias
+voluminosas y rápidas, que el modelo sí reconoce como raras.
+
+---
+
 ## 1. Datos que hay que poner
 
 Solo hay **un dato obligatorio**: la IP de PC1. El resto ya tiene valores por defecto que
@@ -65,7 +102,9 @@ red:
    ```
    New-NetFirewallRule -DisplayName "Demo PC2 - ping" -Protocol ICMPv4 -IcmpType 8 -Direction Inbound -Action Allow
    ```
-4. **Levantar los servidores HTTP** (dos terminales, en una carpeta con un archivo de prueba):
+4. **Levantar los servidores HTTP.** Lo más simple, desde `PC1/`: `python scripts/servidor_demo.py`
+   (una terminal, puertos 8000 y 8080, crea `prueba.txt` y `grande.bin`). A mano, en dos
+   terminales y en una carpeta con un archivo de prueba:
    ```
    echo hola desde PC1 > prueba.txt
    python -m http.server 8000
@@ -135,10 +174,11 @@ python menu.py
 | 2 | `2` Escaneo de puertos | `s` a la confirmación de la IP | Comando `nmap -sT -p 1-1024 <IP>`, puertos abiertos (al menos `8000/tcp` y `8080/tcp`) y `Nmap done`. Tarda de unos segundos a ~1 minuto |
 | 3 | `3` Ráfaga | Duración: `10` (o Enter = 30) y `s` a la confirmación | `Ráfaga a <IP>:8080 durante 10.0 s - intentos: 200, exitosas: ...`. En PC1 la terminal del 8080 muestra muchos mensajes |
 | 4 | `3` Ráfaga | Duración: `120` | Mensaje `se recorta a 30 s`: demuestra el límite de seguridad. Se puede responder `n` para cancelar |
-| 5 | `4` Ver registro | — | Las filas de los pasos anteriores con hora de inicio/fin |
-| 6 | `5` Salir | — | — |
+| 5 | `4` Escenario mixto | Duración (Enter = 300 s) y `s` | Ver la sección 0 |
+| 6 | `5` Ver registro | — | Las filas de los pasos anteriores con hora de inicio/fin |
+| 7 | `6` Salir | — | — |
 
-Antes de los pasos 2 y 3 el programa muestra la IP destino y pide confirmar: **comprobar que
+Antes de los pasos 2, 3 y 5 el programa muestra la IP destino y pide confirmar: **comprobar que
 es la IP de PC1** antes de responder `s`.
 
 ### Demostrar la protección de la IP (opcional)
@@ -184,12 +224,14 @@ Para el modelo de laboratorio de PC1 hace falta una sesión más larga con tráf
 | nmap: `Host seems down` | PC1 no responde al ping de descubrimiento | Habilitar el ping en PC1, o usar `argumentos_nmap: "-sT -Pn"` |
 | Ráfaga con todo en `errores` | Firewall de PC1 descarta el puerto 8080 | Levantar el `http.server 8080` y permitirlo en el firewall |
 | Ráfaga con todo en `rechazadas` | Nada escucha en 8080 en PC1 | Normal si no se levantó el servidor; igual genera tráfico |
+| Escenario mixto: `Aviso: hubo errores` | `servidor_demo.py` no está corriendo en PC1 | Levantarlo; sin `grande.bin` no hay alertas |
+| `servidor_demo.py`: puerto ocupado | Ya hay un `http.server` en 8000/8080 | Cerrarlo (Ctrl+C en su terminal) |
 
 ---
 
 ## 7. Al terminar (en PC1)
 
-- Detener los `http.server` con Ctrl+C.
+- Detener `servidor_demo.py` (o los `http.server`) con Ctrl+C.
 - Si se creó la regla de ping y ya no se quiere (PowerShell como administrador):
   ```
   Remove-NetFirewallRule -DisplayName "Demo PC2 - ping"

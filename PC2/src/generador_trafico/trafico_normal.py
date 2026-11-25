@@ -55,7 +55,22 @@ def construir_url_http(config: dict) -> str:
     return f"http://{host}:{puerto}{ruta}"
 
 
-def descargar_archivo_http(config: dict, url: str) -> dict:
+def ping_una_vez(ip: str) -> bool:
+    """Un solo eco ICMP hacia ``ip`` (ya validada). Devuelve si hubo respuesta."""
+    resultado = subprocess.run(_comando_ping(ip), capture_output=True, text=True, errors="replace")
+    return resultado.returncode == 0 and "ttl" in resultado.stdout.lower()
+
+
+def construir_url_archivo(config: dict, ruta: str) -> str:
+    """URL de un archivo concreto del servidor HTTP de PC1 (mismo puerto que http.puerto)."""
+    ip = validar_ip_destino(config)
+    puerto = int((config.get("http") or {}).get("puerto", 8000))
+    ruta = ruta if ruta.startswith("/") else "/" + ruta
+    host = f"[{ip}]" if ":" in ip else ip
+    return f"http://{host}:{puerto}{ruta}"
+
+
+def descargar_archivo_http(config: dict, url: str, silencioso: bool = False) -> dict:
     """Descarga `url` (solo si apunta a PC1). Requiere `python -m http.server` en PC1."""
     ip = validar_ip_destino(config)
     partes = urlparse(url)
@@ -67,5 +82,6 @@ def descargar_archivo_http(config: dict, url: str) -> dict:
         contenido = respuesta.read()
         estado = respuesta.status
     segundos = time.monotonic() - inicio
-    print(f"  Descarga HTTP {url}: estado {estado}, {len(contenido)} bytes en {segundos:.2f} s.")
+    if not silencioso:
+        print(f"  Descarga HTTP {url}: estado {estado}, {len(contenido)} bytes en {segundos:.2f} s.")
     return {"url": url, "estado": estado, "bytes": len(contenido)}

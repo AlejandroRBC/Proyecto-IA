@@ -105,6 +105,62 @@ def validar_parametros_rafaga(config: dict) -> dict:
     }
 
 
+LIMITE_ABSOLUTO_MIXTO_SEGUNDOS = 1800  # 30 min: tope del escenario mixto aunque el YAML diga más
+FASES_MIXTO = ("normal_inicial", "anomala", "normal_final")
+
+
+def validar_parametros_mixto(config: dict) -> dict:
+    """Valida la sección 'mixto' sin generar tráfico. Devuelve los parámetros normalizados."""
+    mixto = (config or {}).get("mixto") or {}
+
+    def numero(clave, defecto, minimo, maximo):
+        valor = mixto.get(clave, defecto)
+        if isinstance(valor, bool) or not isinstance(valor, (int, float)) or not minimo <= valor <= maximo:
+            raise ErrorConfiguracion(f"'mixto.{clave}' debe ser un número entre {minimo} y {maximo} "
+                                     f"(valor actual: {valor!r}).")
+        return valor
+
+    maxima = numero("duracion_total_maxima_segundos", 900, 10, LIMITE_ABSOLUTO_MIXTO_SEGUNDOS)
+    total = numero("duracion_total_segundos", 300, 3, maxima)
+    proporciones = mixto.get("proporciones", [0.4, 0.2, 0.4])
+    if (not isinstance(proporciones, list) or len(proporciones) != 3
+            or any(isinstance(p, bool) or not isinstance(p, (int, float)) or p <= 0 for p in proporciones)
+            or abs(sum(proporciones) - 1) > 0.01):
+        raise ErrorConfiguracion("'mixto.proporciones' debe ser una lista de 3 números positivos que sumen 1 "
+                                 "(normal inicial, anómala, normal final), ej. [0.4, 0.2, 0.4].")
+    pausa_min = numero("pausa_normal_min_segundos", 1, 0, 60)
+    pausa_max = numero("pausa_normal_max_segundos", 4, 0, 60)
+    if pausa_min > pausa_max:
+        raise ErrorConfiguracion("'mixto.pausa_normal_min_segundos' no puede ser mayor que la máxima.")
+    for clave in ("archivo_normal", "archivo_grande"):
+        if not str(mixto.get(clave, "")).strip():
+            raise ErrorConfiguracion(f"Falta 'mixto.{clave}' (ruta del archivo en el servidor HTTP de PC1).")
+    return {
+        "duracion_total_segundos": float(total),
+        "duracion_total_maxima_segundos": float(maxima),
+        "proporciones": [float(p) for p in proporciones],
+        "archivo_normal": str(mixto["archivo_normal"]),
+        "archivo_grande": str(mixto["archivo_grande"]),
+        "descargas_paralelas": int(numero("descargas_paralelas", 3, 1, 10)),
+        "pausa_normal_min_segundos": float(pausa_min),
+        "pausa_normal_max_segundos": float(pausa_max),
+        "pausa_anomala_segundos": float(numero("pausa_anomala_segundos", 0.2, 0, 10)),
+        "incluir_rafaga": bool(mixto.get("incluir_rafaga", True)),
+    }
+
+
+def planificar_fases(config: dict, total=None) -> list:
+    """Fases del escenario mixto como [(nombre, segundos)]; la duración se recorta al máximo."""
+    parametros = validar_parametros_mixto(config)
+    if total is None:
+        total = parametros["duracion_total_segundos"]
+    total = float(total)
+    if total <= 0:
+        raise ErrorConfiguracion("La duración del escenario mixto debe ser mayor que 0.")
+    total = min(total, parametros["duracion_total_maxima_segundos"], LIMITE_ABSOLUTO_MIXTO_SEGUNDOS)
+    return [(nombre, total * p) for nombre, p in zip(FASES_MIXTO, parametros["proporciones"])]
+
+
 def calcular_duracion_efectiva(duracion_solicitada, duracion_maxima) -> float:
     """Recorta siempre la duración pedida al máximo configurado (y al límite absoluto)."""
     tope = min(float(duracion_maxima), float(LIMITE_ABSOLUTO_RAFAGA_SEGUNDOS))

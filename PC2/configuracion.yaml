@@ -2,7 +2,7 @@
 # TODO el tráfico se dirige únicamente a red.ip_destino_pc1.
 
 red:
-  ip_destino_pc1: ""   # OBLIGATORIO: completar con la IP real de PC1 en la red de laboratorio (ej. "192.168.1.10")
+  ip_destino_pc1: ""   # OBLIGATORIO: completar con la IP real de PC1 en la red de laboratorio (ej. "192.168.1.7")
 
 ping:
   cantidad: 10
@@ -25,6 +25,20 @@ rafagas:
   concurrencia: 10               # hilos que abren conexiones en paralelo
   timeout_conexion_segundos: 1
   puerto_destino: 8080
+
+# Escenario mixto para la demo (opción 4): normal -> anómalo -> normal.
+# Requiere en PC1: python scripts/servidor_demo.py (sirve prueba.txt y grande.bin en http.puerto).
+mixto:
+  duracion_total_segundos: 300          # 5 min por defecto (se puede cambiar al ejecutarlo)
+  duracion_total_maxima_segundos: 900   # tope (el programa no acepta más de 1800)
+  proporciones: [0.4, 0.2, 0.4]         # normal inicial, anómala, normal final (300 s -> 120/60/120)
+  archivo_normal: "/prueba.txt"         # archivo pequeño: tráfico normal
+  archivo_grande: "/grande.bin"         # ~256 KB: el modelo marcó estas descargas como anómalas
+  descargas_paralelas: 3
+  pausa_normal_min_segundos: 1
+  pausa_normal_max_segundos: 4
+  pausa_anomala_segundos: 0.2
+  incluir_rafaga: true                  # ráfagas en la fase anómala (cada una <= rafagas.duracion_maxima_segundos)
 
 registro:
   ruta_csv: "registros/escenarios_ejecutados.csv"   # relativa a la carpeta de este archivo

@@ -14,10 +14,13 @@ sys.path.insert(0, str(CARPETA / "src"))
 from generador_trafico.configuracion import (  # noqa: E402
     ErrorConfiguracion,
     cargar_configuracion,
+    planificar_fases,
     ruta_registro,
     validar_ip_destino,
+    validar_parametros_mixto,
     validar_parametros_rafaga,
 )
+from generador_trafico.escenario_mixto import ejecutar_escenario_mixto  # noqa: E402
 from generador_trafico.escaneo_puertos import escanear_puertos  # noqa: E402
 from generador_trafico.rafagas import generar_rafaga  # noqa: E402
 from generador_trafico.registrador import (  # noqa: E402
@@ -33,8 +36,9 @@ OPCIONES = """
   1. Generar tráfico normal (ping)
   2. Escanear puertos de PC1
   3. Generar ráfaga de conexiones
-  4. Ver últimos escenarios registrados
-  5. Salir
+  4. Escenario mixto para la demo (normal -> anómalo -> normal)
+  5. Ver últimos escenarios registrados
+  6. Salir
 ==============================================================="""
 
 
@@ -108,6 +112,33 @@ def opcion_rafaga(config: dict) -> None:
     ejecutar_y_registrar(config, "rafaga_conexiones", lambda: generar_rafaga(config, duracion))
 
 
+def opcion_mixto(config: dict) -> None:
+    ip = validar_ip_destino(config)
+    parametros = validar_parametros_mixto(config)
+    defecto, maximo = parametros["duracion_total_segundos"], parametros["duracion_total_maxima_segundos"]
+    texto = input(f"  Duración total en segundos (Enter = {defecto:g}, máximo {maximo:g}): ").strip()
+    total = None
+    if texto:
+        try:
+            total = float(texto)
+        except ValueError:
+            print(f"  Valor no numérico; se usarán {defecto:g} s.")
+        else:
+            if total > maximo:
+                print(f"  Se pidió {total:g} s, pero el máximo es {maximo:g} s: se recorta.")
+    fases = planificar_fases(config, total)
+    print("  Plan: " + " -> ".join(f"{nombre} {segundos:.0f} s" for nombre, segundos in fases))
+    print(f"  Fase anómala: {parametros['descargas_paralelas']} descargas en paralelo de "
+          f"{parametros['archivo_grande']}" + (" + ráfagas de conexiones" if parametros["incluir_rafaga"] else ""))
+    print("  Requiere en PC1: python scripts/servidor_demo.py (sirve los archivos en los puertos 8000 y 8080).")
+    if not confirmar_ataque(ip, "escenario mixto con fase anómala"):
+        print("  Cancelado.")
+        return
+    print("  (Ctrl+C para detenerlo; las fases ya hechas quedan registradas)")
+    filas = ejecutar_escenario_mixto(config, total)
+    print(f"\n  Escenario mixto terminado: {len(filas)} fases registradas en {ruta_registro(config)}.")
+
+
 def opcion_ver_registro(config: dict) -> None:
     ruta = ruta_registro(config)
     filas = leer_ultimos_escenarios(ruta, 10)
@@ -120,7 +151,8 @@ def opcion_ver_registro(config: dict) -> None:
               f"| {fila['ip_destino']} | {fila['parametros']}")
 
 
-ACCIONES = {"1": opcion_trafico_normal, "2": opcion_escaneo, "3": opcion_rafaga, "4": opcion_ver_registro}
+ACCIONES = {"1": opcion_trafico_normal, "2": opcion_escaneo, "3": opcion_rafaga, "4": opcion_mixto,
+            "5": opcion_ver_registro}
 
 
 def main() -> None:
@@ -140,8 +172,8 @@ def main() -> None:
         try:
             opcion = input("Elige una opción: ").strip()
         except EOFError:
-            opcion = "5"
-        if opcion == "5":
+            opcion = "6"
+        if opcion == "6":
             print("Hasta luego.")
             return
         accion = ACCIONES.get(opcion)

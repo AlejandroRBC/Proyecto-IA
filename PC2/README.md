@@ -59,8 +59,9 @@ python menu.py
 | 1 | Tráfico normal | `ping` del sistema hacia PC1 (`ping.cantidad` ecos, uno cada `ping.intervalo_segundos`). Luego ofrece una descarga HTTP opcional. |
 | 2 | Escaneo de puertos | `nmap <argumentos_nmap> -p <inicial>-<final> <IP de PC1>` (por defecto `-sT`, puertos 1-1024; TCP connect, sin privilegios de administrador). Pide confirmación. |
 | 3 | Ráfaga de conexiones | Conexiones TCP rápidas y sucesivas con `socket` (sin Npcap ni administrador) a `rafagas.puerto_destino`, a `conexiones_por_segundo`, con `concurrencia` hilos, durante la duración indicada (máximo `duracion_maxima_segundos`). Pide confirmación. Ctrl+C la detiene antes. |
-| 4 | Ver registro | Muestra los últimos 10 escenarios del CSV. |
-| 5 | Salir | |
+| 4 | Escenario mixto | Para la presentación: fase normal (ping + descarga de `prueba.txt`), fase **anómala** (descargas en paralelo de `grande.bin`, ~256 KB, + ráfagas) y fase normal otra vez. 5 min por defecto (40/20/40 %), configurable en la sección `mixto` (tope 900 s; el programa no acepta más de 1800). Pide confirmación. Cada fase queda como fila `mixto_normal`/`mixto_anomalo` en el registro. Requiere `python scripts/servidor_demo.py` en PC1. |
+| 5 | Ver registro | Muestra los últimos 10 escenarios del CSV. |
+| 6 | Salir | |
 
 ### Descarga HTTP opcional (requisito manual en PC1)
 

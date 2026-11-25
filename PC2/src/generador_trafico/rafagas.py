@@ -23,10 +23,12 @@ def intentar_conexion(ip: str, puerto: int, timeout: float) -> str:
         return "error"
 
 
-def generar_rafaga(config: dict, duracion_solicitada=None, conectar=intentar_conexion) -> dict:
+def generar_rafaga(config: dict, duracion_solicitada=None, conectar=intentar_conexion, detener=None) -> dict:
     """Lanza `conexiones_por_segundo` conexiones por segundo hasta agotar la duración.
 
     `conectar` se puede reemplazar en pruebas para no abrir conexiones reales.
+    `detener` (threading.Event opcional) corta la ráfaga antes de tiempo; lo usa el
+    escenario mixto, donde la ráfaga corre en un hilo y Ctrl+C llega al hilo principal.
     """
     ip = validar_ip_destino(config)
     parametros = validar_parametros_rafaga(config)
@@ -55,8 +57,11 @@ def generar_rafaga(config: dict, duracion_solicitada=None, conectar=intentar_con
             ahora = time.monotonic()
             if ahora >= fin:
                 break
+            if detener is not None and detener.is_set():
+                interrumpida = True
+                break
             if ahora < siguiente:
-                time.sleep(min(siguiente - ahora, fin - ahora))
+                time.sleep(min(siguiente - ahora, fin - ahora, 0.2))
                 continue
             ejecutor.submit(tarea)
             enviadas += 1

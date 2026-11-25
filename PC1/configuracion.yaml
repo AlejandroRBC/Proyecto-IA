@@ -88,7 +88,7 @@ laboratorio:
   # Un flujo se etiqueta como ataque si involucra la IP de PC2 de ese escenario y se solapa
   # con su intervalo [inicio - tolerancia, fin + tolerancia] (margen por desfase de relojes).
   tolerancia_segundos: 5
-  tipos_ataque: [escaneo_puertos, rafaga_conexiones]
+  tipos_ataque: [escaneo_puertos, rafaga_conexiones, mixto_anomalo]   # mixto_anomalo = fase anómala del escenario mixto de PC2
   min_flujos_normales: 200          # por debajo de esto no se entrena (muy pocos datos)
 
 archivos_salida:
