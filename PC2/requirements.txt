@@ -1,0 +1,7 @@
+# PC2 usa casi solo la librería estándar de Python.
+# La descarga HTTP se hace con urllib (estándar), por eso no se agrega 'requests'.
+pyyaml>=6.0
+pytest>=7.0
+
+# Requisito externo (NO se instala con pip): nmap
+#   https://nmap.org/download.html  (en Windows, el instalador agrega nmap al PATH)

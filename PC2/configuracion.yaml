@@ -1,0 +1,30 @@
+# Configuración de PC2 — generador de tráfico de laboratorio.
+# TODO el tráfico se dirige únicamente a red.ip_destino_pc1.
+
+red:
+  ip_destino_pc1: ""   # OBLIGATORIO: completar con la IP real de PC1 en la red de laboratorio (ej. "192.168.1.10")
+
+ping:
+  cantidad: 10
+  intervalo_segundos: 1
+
+http:
+  # Opcional: requiere que en PC1 se ejecute manualmente `python -m http.server 8000`
+  puerto: 8000
+  ruta: "/"
+  timeout_segundos: 5
+
+escaneo_puertos:
+  puerto_inicial: 1
+  puerto_final: 1024
+  argumentos_nmap: "-sT"   # escaneo TCP connect, no requiere privilegios especiales
+
+rafagas:
+  duracion_maxima_segundos: 30   # tope duro; el programa nunca lo supera (y no acepta más de 60)
+  conexiones_por_segundo: 20
+  concurrencia: 10               # hilos que abren conexiones en paralelo
+  timeout_conexion_segundos: 1
+  puerto_destino: 8080
+
+registro:
+  ruta_csv: "registros/escenarios_ejecutados.csv"   # relativa a la carpeta de este archivo

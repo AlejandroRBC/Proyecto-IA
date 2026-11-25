@@ -16,3 +16,7 @@ __pycache__/
 
 # Streamlit
 .streamlit/
+
+# Registros generados por PC2
+PC2/registros/
+.pytest_cache/
