@@ -1,0 +1,72 @@
+# Configuración de CyberGuard AI — PC1
+# Las rutas relativas se resuelven respecto a la carpeta donde está este archivo (PC1/).
+
+rutas:
+  datos_crudos: ../Datasets
+  datos_procesados: datos/procesados
+  modelos: modelos
+  reportes: reportes
+  figuras: reportes/figuras
+  alertas: datos/en_vivo/alertas.csv
+  flujos_analizados: datos/en_vivo/flujos_analizados.csv
+  # Experimento log1p: rutas separadas para no sobrescribir el modelo base.
+  modelos_log1p: modelos/log1p
+  reportes_log1p: reportes/log1p
+
+datos:
+  # Si la lectura falla con UnicodeDecodeError, cambiar a "latin1".
+  codificacion: utf-8
+  archivo_entrenamiento: Monday-WorkingHours.pcap_ISCX.csv
+  archivos_evaluacion:
+    - Tuesday-WorkingHours.pcap_ISCX.csv
+    - Wednesday-workingHours.pcap_ISCX.csv
+    - Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv
+    - Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv
+    - Friday-WorkingHours-Morning.pcap_ISCX.csv
+    - Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv
+    - Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv
+  columna_etiqueta: Label
+  valor_benigno: BENIGN
+
+# Orden fijo: el modelo siempre recibe las columnas en este orden.
+caracteristicas:
+  - Flow Duration
+  - Total Fwd Packets
+  - Total Backward Packets
+  - Total Length of Fwd Packets
+  - Total Length of Bwd Packets
+  - Flow Bytes/s
+  - Flow Packets/s
+  - Flow IAT Mean
+  - SYN Flag Count
+  - Destination Port
+
+division:
+  proporcion_validacion: 0.2
+  semilla: 42
+
+modelo:
+  n_estimators: 200
+  max_samples: 256
+  max_features: 1.0
+  contamination: auto
+  random_state: 42
+  n_jobs: -1   # solo velocidad; no cambia los resultados
+
+umbral:
+  fpr_objetivo_validacion: 0.01
+
+# Valores por defecto de scripts/reproducir_flujos.py (se pueden cambiar por línea de comandos).
+demo:
+  archivos_origen:
+    - Monday-WorkingHours.pcap_ISCX.csv
+    - Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv
+  filas_por_archivo: 25
+  intervalo_segundos: 0.5
+  semilla: 42
+
+archivos_salida:
+  modelo: isolation_forest.joblib
+  metadatos: metadatos_modelo.json
+  metricas: metricas.csv
+  metricas_por_tipo: metricas_por_tipo.csv

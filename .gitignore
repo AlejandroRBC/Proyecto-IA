@@ -6,6 +6,7 @@ PC1/datos/procesados/
 PC1/datos/en_vivo/
 PC1/modelos/
 PC1/reportes/figuras/
+PC1/reportes/log1p/
 
 # Entornos virtuales
 venv/
