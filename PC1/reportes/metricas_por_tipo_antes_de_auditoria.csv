@@ -1,0 +1,16 @@
+Label,flujos,detectados_como_anomalos,proporcion_detectada
+BENIGN,1401698,17081,0.01218593448802809
+DoS Hulk,165864,0,0.0
+DDoS,127172,0,0.0
+PortScan,90046,0,0.0
+DoS GoldenEye,10259,0,0.0
+DoS Slowhttptest,5164,2,0.0003872966692486445
+DoS slowloris,4863,0,0.0
+FTP-Patator,4257,0,0.0
+SSH-Patator,3107,0,0.0
+Bot,1910,14,0.007329842931937173
+Web Attack � Brute Force,1385,71,0.051263537906137184
+Web Attack � XSS,625,16,0.0256
+Infiltration,36,12,0.3333333333333333
+Web Attack � Sql Injection,15,0,0.0
+Heartbleed,11,11,1.0

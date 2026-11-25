@@ -49,7 +49,14 @@ def limpiar(
       2. Convertir a numérico (lo no convertible pasa a NaN).
       3. Reemplazar +/-infinito por NaN.
       4. Eliminar filas con NaN en las características.
-      5. Eliminar duplicados exactos considerando SOLO las características.
+      5. Eliminar duplicados exactos:
+         - Con ``columna_etiqueta`` (evaluación, y entrenamiento con el lunes): el criterio
+           es las características MÁS la etiqueta. Dos filas solo son duplicadas si coinciden
+           en ambas, así nunca se descarta un ataque en favor de una fila benigna (o al revés)
+           solo porque comparten valores. En el lunes, todo BENIGN, da lo mismo que el criterio anterior.
+         - Sin ``columna_etiqueta``: el criterio son solo las características.
+         (Antes de la auditoría de duplicados se usaban siempre solo las características;
+         ver ``scripts/auditoria_duplicados.py``.)
       6. Solo si ``aplicar_log1p=True`` (experimento; por defecto no se hace):
          eliminar las filas con negativos en ``COLUMNAS_LOG1P`` y aplicar
          ``np.log1p`` a esas columnas. Va después de los duplicados para no
@@ -79,8 +86,9 @@ def limpiar(
     datos = datos.dropna(subset=caracteristicas)
     informar("tras eliminar NaN/infinitos", datos)
 
-    datos = datos.drop_duplicates(subset=caracteristicas, keep="first")
-    informar("tras eliminar duplicados", datos)
+    criterio = caracteristicas + [columna_etiqueta] if columna_etiqueta else caracteristicas
+    datos = datos.drop_duplicates(subset=criterio, keep="first")
+    informar("tras eliminar duplicados" + (" (+ etiqueta)" if columna_etiqueta else ""), datos)
 
     if not aplicar_log1p:
         return datos.reset_index(drop=True)

@@ -72,14 +72,18 @@ YAML, así que los scripts funcionan aunque se lancen desde otro directorio.
 | Entrenamiento | Solo filas `BENIGN` de `Monday-WorkingHours.pcap_ISCX.csv` |
 | División | 80 % entrenamiento / 20 % validación (ambas benignas), `random_state=42` |
 | Características | 10 columnas en orden fijo (ver `configuracion.yaml`); `Label` nunca entra al modelo |
-| Limpieza | `.str.strip()` en nombres → numérico → ±infinito a NaN → eliminar NaN → eliminar duplicados exactos **sobre las 10 características** |
+| Limpieza | `.str.strip()` en nombres → numérico → ±infinito a NaN → eliminar NaN → eliminar duplicados exactos **sobre las 10 características + `Label`** (solo las características si no se pasa etiqueta) |
 | Modelo | `IsolationForest(n_estimators=200, max_samples=256, max_features=1.0, contamination="auto", random_state=42)` |
 | Umbral | Percentil 1 de `decision_function` en validación (≈1 % de falsos positivos). Un flujo es anómalo si `decision_function < umbral` |
 | Evaluación | Los 7 archivos de martes a viernes, usados una sola vez y sin ajustar nada con ellos |
 
 Notas sobre la limpieza:
-- En la evaluación los duplicados también se eliminan solo sobre las 10 características.
-  Si dos flujos tienen las mismas características pero distinta etiqueta, se conserva el primero.
+- Dos flujos solo son duplicados si coinciden en las 10 características **y** en la
+  etiqueta. Así nunca se descarta un ataque en favor de una fila benigna con los mismos
+  valores. En el entrenamiento da lo mismo, porque el lunes es todo BENIGN: se
+  comprobó que quedan las mismas 459,582 filas.
+- Hasta la auditoría de duplicados se usaban solo las 10 características; ver
+  "Auditoría de duplicados en la evaluación" más abajo.
 - La versión del dataset usada (MachineLearningCVE) no trae columnas de IP ni Timestamp.
 
 ### Verificación de columnas (Fase 1)
@@ -113,6 +117,11 @@ Se toma el ataque como clase positiva: `BENIGN` = normal (0) y cualquier otro `L
 | F1 | 0.0006 |
 | FPR en evaluación | 1.22 % |
 | ROC-AUC | 0.695 |
+| Flujos evaluados | 1,817,947 |
+
+Estos son los valores tras corregir la deduplicación. Los anteriores están en
+`reportes/metricas_antes_de_auditoria.csv` y solo cambian en el ROC-AUC (0.6953 → 0.6946)
+y en el número de flujos.
 
 La configuración base **casi no detecta ataques** con un umbral de 1 % de FPR.
 En `reportes/figuras/distribucion_puntajes.png` se ve que los ataques sí tienen
@@ -124,6 +133,28 @@ Mejorar esto requiere una decisión metodológica, por ejemplo transformar las
 características (`log1p`), agregar otras o fijar otro FPR objetivo por política.
 Esa decisión debe justificarse **sin** usar los archivos de evaluación. Si no,
 hay fuga de datos.
+
+## Auditoría de duplicados en la evaluación
+
+La auditoría revisó si la deduplicación por las 10 características descartaba filas
+de ataque en favor de filas BENIGN con los mismos valores.
+
+```powershell
+python scripts/auditoria_duplicados.py            # diagnóstico (no cambia nada)
+python -m src.modelo.evaluar                      # evaluación con el criterio corregido
+python scripts/comparar_auditoria_duplicados.py   # escribe la comparación
+```
+
+- **Diagnóstico:** había 1,510 grupos conflictivos, con más de una etiqueta bajo las
+  mismas características. En ellos, 49,393 filas se eliminaban en favor de una fila con
+  otra etiqueta. Resultados en `reportes/auditoria_duplicados*.csv`.
+- **Corrección:** `limpiar()` deduplica por características + `Label`. Esto recuperó
+  1,535 filas: +572 de PortScan, +470 de DoS Hulk y +14 de DDoS.
+- **Efecto:** ninguno en la detección. Siguen siendo 126 verdaderos positivos, y PortScan,
+  DDoS y DoS Hulk siguen en 0 %. El bug no explicaba el 0 % de los ataques de volumen.
+  Detalle en `reportes/comparacion_auditoria_duplicados.md`.
+- **Pendiente:** el experimento log1p (`reportes/log1p/`) se hizo con el criterio anterior
+  y no se repitió.
 
 ## Experimento: log1p en características de volumen y tasa
 

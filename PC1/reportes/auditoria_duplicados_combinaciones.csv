@@ -1,0 +1,27 @@
+combinacion,grupos,filas
+BENIGN + DoS Hulk,670,45508
+BENIGN + DoS Hulk + Web Attack � XSS,11,11251
+BENIGN + SSH-Patator,81,2100
+BENIGN + PortScan,567,1627
+BENIGN + DDoS,13,231
+BENIGN + Web Attack � Brute Force,43,155
+BENIGN + Bot,55,115
+BENIGN + Web Attack � XSS,14,63
+BENIGN + DoS GoldenEye,19,43
+BENIGN + DoS GoldenEye + DoS Hulk,4,23
+DoS GoldenEye + DoS Hulk,4,20
+BENIGN + DoS slowloris,2,20
+PortScan + Web Attack � Brute Force,3,18
+BENIGN + DoS Slowhttptest + DoS slowloris + Web Attack � Brute Force,2,15
+DoS Slowhttptest + DoS slowloris,5,13
+BENIGN + Web Attack � Brute Force + Web Attack � XSS,2,9
+Web Attack � Brute Force + Web Attack � XSS,2,9
+Web Attack � Brute Force + Web Attack � Sql Injection,2,8
+BENIGN + Web Attack � Brute Force + Web Attack � Sql Injection,2,8
+DoS Hulk + PortScan,3,6
+DoS Hulk + Web Attack � Brute Force,1,3
+BENIGN + DoS slowloris + Web Attack � Brute Force,1,3
+BENIGN + DoS slowloris + Web Attack � Sql Injection,1,3
+BENIGN + DoS Slowhttptest,1,2
+BENIGN + FTP-Patator,1,2
+DDoS + DoS Hulk,1,2

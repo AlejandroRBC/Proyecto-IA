@@ -1,0 +1,153 @@
+CYBERGUARD AI - RESUMEN DE AVANCE (PC1)
+Fecha: 2026-11-25
+=======================================================================
+
+QUÉ ES
+------
+Sistema de detección de anomalías en tráfico de red con aprendizaje no supervisado
+(Isolation Forest), entrenado solo con tráfico normal y evaluado con CICIDS2017.
+No clasifica tipos de ataque, no asigna gravedad y no bloquea conexiones.
+Todo el trabajo está en PC1/. PC2/ todavía no se ha desarrollado.
+
+
+1. PIPELINE DE DATOS, ENTRENAMIENTO Y EVALUACIÓN  (HECHO)
+-----------------------------------------------------------------------
+- Verificación de columnas: las 10 características y Label existen en los 8 CSV
+  (después de .str.strip()). Los 8 se leen en utf-8. No hubo que renombrar nada.
+- 10 características, en orden fijo: Flow Duration, Total Fwd Packets,
+  Total Backward Packets, Total Length of Fwd Packets, Total Length of Bwd Packets,
+  Flow Bytes/s, Flow Packets/s, Flow IAT Mean, SYN Flag Count, Destination Port.
+- Limpieza: nombres sin espacios -> numérico -> infinitos a NaN -> eliminar NaN ->
+  eliminar duplicados (por características + Label; ver sección 6).
+- Entrenamiento: solo BENIGN del lunes. Tras limpiar quedan 459,582 filas, divididas
+  80/20 (367,665 para entrenar y 91,917 para validar), semilla 42.
+  IsolationForest(n_estimators=200, max_samples=256, max_features=1.0,
+  contamination="auto", random_state=42).
+- Umbral: percentil 1 de decision_function en validación = -0.157354
+  (FPR real en validación: 1.00 %). Un flujo es anómalo si su score < umbral.
+- Evaluación: los 7 archivos de martes a viernes, usados una sola vez y sin ajustar
+  nada con ellos. Nota: el primer prompt decía 6 archivos, pero son 7.
+- Reproducible: dos corridas dan exactamente el mismo resultado.
+
+Resultados oficiales (1,817,947 flujos evaluados):
+  Precision 0.0073 | Recall 0.0003 | F1 0.0006 | FPR 1.22 % | ROC-AUC 0.695
+  Por tipo: Heartbleed 100 % | Infiltration 33 % | Web Attack Brute Force 5 %
+            PortScan, DDoS, DoS Hulk y el resto de los DoS: 0 %
+
+Interpretación: el modelo detecta anomalías puntuales y raras, pero no los ataques
+de volumen. Esos ataques forman grupos densos de flujos parecidos entre sí y no se
+aíslan como raros. Es una limitación estructural de Isolation Forest, no un error
+de calibración del umbral.
+
+
+2. DETECTOR Y ALERTAS  (HECHO)
+-----------------------------------------------------------------------
+- src/modelo/detector.py: cargar_detector, preparar_flujo_para_prediccion,
+  evaluar_flujo y evaluar_lote. Un flujo inválido (falta una característica,
+  NaN, infinito o texto) queda como NO_EVALUABLE, sin lanzar error.
+  Al modelo solo entran las 10 características. id_flujo, las IPs y los puertos
+  son solo para mostrar.
+- src/alertas/gestor_alertas.py:
+    registrar_alerta / procesar_resultado -> datos/en_vivo/alertas.csv
+      (solo anomalías)
+    registrar_flujo_analizado -> datos/en_vivo/flujos_analizados.csv
+      (historial completo de todos los flujos evaluados)
+
+
+3. DEMO DE MONITOREO SIMULADO  (HECHO)
+-----------------------------------------------------------------------
+- scripts/reproducir_flujos.py: reproduce flujos de los CSV, uno por uno, con una
+  pausa entre ellos.
+  Opciones: --origen, --filas, --intervalo-segundos, --semilla, --primeras,
+            --etiqueta, --limpiar-alertas, --sin-historial-completo.
+- El dataset no trae IPs: esos campos quedan vacíos y puerto_destino toma el valor
+  de Destination Port.
+- Resultados con datos reales: con PortScan, 0 alertas, coherente con su recall de 0 %.
+  Con Heartbleed, 11 de 11 anómalos. Con Infiltration, 12 de 36.
+
+
+4. PANEL STREAMLIT  (HECHO)
+-----------------------------------------------------------------------
+- Se corre desde PC1/ con: streamlit run src/app/panel.py
+- Secciones:
+    * Lanzar monitoreo (barra lateral): elegir archivo, filtrar por etiqueta,
+      cantidad de flujos, intervalo y semilla; botón para iniciar; botón para
+      limpiar el historial (con confirmación).
+    * Estado del modelo: tarjetas de métricas, tabla por tipo ordenada por recall
+      y texto sobre la limitación conocida.
+    * Monitoreo actual: conteos, gráfica de puntajes con la línea del umbral
+      oficial, y las últimas alertas.
+    * Explorador de umbral: umbral hipotético recalculado en memoria. Es solo
+      visualización y no cambia el sistema.
+- El panel no carga el modelo: lee los CSV y lanza la demo como subproceso.
+- Para la exposición:
+    1) Limpiar el historial.
+    2) Wednesday con "Todas" (~60 flujos normales).
+    3) Wednesday + Heartbleed (11 de 11 alertas).
+    4) Opcional: Thursday-Infilteration + Infiltration.
+
+
+5. EXPERIMENTO log1p  (HECHO, PROPUESTO PARA DESCARTE)
+-----------------------------------------------------------------------
+- scripts/experimento_log1p.py. Resultados en modelos/log1p/ y reportes/log1p/
+  (los dos fuera de git).
+- Resultado: Infiltration 33 % -> 42 % (solo 3 flujos más), ROC-AUC 0.695 -> 0.702,
+  ataques de volumen sin cambios (0 %), FPR en evaluación 1.22 % -> 1.47 %.
+- Recomendación: documentarlo como experimento descartado. La decisión formal
+  queda pendiente.
+- Nota: se corrió con el criterio de duplicados anterior a la auditoría.
+
+
+6. AUDITORÍA DE DUPLICADOS  (HECHO)
+-----------------------------------------------------------------------
+- scripts/auditoria_duplicados.py (diagnóstico) y
+  scripts/comparar_auditoria_duplicados.py (comparación).
+- Hallazgo: 1,510 grupos de flujos con las mismas 10 características pero
+  etiquetas distintas. 49,393 filas se eliminaban en favor de una fila con otra
+  etiqueta.
+- Corrección: limpiar() ahora deduplica por características + Label.
+  Se recuperaron 1,535 filas: +572 de PortScan, +470 de DoS Hulk, +14 de DDoS.
+- El entrenamiento no cambió: siguen las mismas 459,582 filas, idénticas.
+- Efecto en métricas: prácticamente ninguno. Siguen siendo 126 verdaderos positivos
+  y los ataques de volumen siguen en 0 %. El bug no explicaba el 0 %.
+- Métricas anteriores guardadas en reportes/metricas_antes_de_auditoria.csv.
+  Comparación en reportes/comparacion_auditoria_duplicados.md.
+
+
+7. PRUEBAS
+-----------------------------------------------------------------------
+- pytest (desde PC1/): 38 pruebas, todas pasan. Cubren limpieza, carga, log1p,
+  detector, gestor de alertas y la lógica del panel. Usan datos sintéticos, no los
+  CSV reales.
+
+
+CÓMO EJECUTAR (desde PC1/)
+-----------------------------------------------------------------------
+  python -m venv .venv
+  .venv\Scripts\activate
+  pip install -r requirements.txt
+  python scripts/ejecutar_experimentos.py      # verificar, entrenar y evaluar
+  python scripts/reproducir_flujos.py          # demo por consola
+  streamlit run src/app/panel.py               # panel
+  pytest                                       # pruebas
+Los CSV de CICIDS2017 deben estar en ../Datasets (no se suben a git).
+
+
+QUÉ NO SE SUBE A GIT
+-----------------------------------------------------------------------
+Datasets/, PC1/modelos/ (incluido log1p), PC1/datos/procesados/ y en_vivo/,
+PC1/reportes/figuras/, PC1/reportes/log1p/ y los entornos virtuales.
+Para regenerar el modelo: python scripts/ejecutar_experimentos.py
+
+
+PENDIENTE
+-----------------------------------------------------------------------
+- Captura real con CICFlowMeter/Npcap (src/captura/). Reemplazaría a
+  reproducir_flujos.py como fuente de flujos, usando las mismas funciones del
+  detector y llenando las IPs.
+- PC2.
+- Decidir formalmente sobre log1p y, si se quiere, repetirlo con el criterio de
+  duplicados corregido.
+- Si se quiere detectar ataques de volumen, hace falta un cambio de enfoque
+  (otras características u otro algoritmo). Isolation Forest con estas 10
+  características no los detecta.

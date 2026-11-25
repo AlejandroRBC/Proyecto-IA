@@ -1,0 +1,16 @@
+Label,filas_totales,filas_en_grupos_duplicados,filas_en_grupos_conflictivos,filas_en_conflicto_con_BENIGN,en_conflictivos_no_primera_del_grupo,eliminadas_criterio_actual,eliminadas_con_otra_etiqueta_conservada,eliminadas_criterio_corregido,quedan_criterio_actual,quedan_criterio_corregido
+BENIGN,1741839,417338,8820,0,7641,340141,430,339831,1401698,1402008
+DoS Hulk,230124,66872,49540,49518,49316,64260,47392,63790,165864,166334
+PortScan,158804,101957,1065,1059,1064,68758,1064,68186,90046,90618
+DDoS,128025,1671,17,16,17,853,17,839,127172,127186
+DoS GoldenEye,10293,51,27,23,22,34,22,12,10259,10281
+FTP-Patator,7935,3842,1,1,0,3678,0,3678,4257,4257
+SSH-Patator,5897,2882,1550,1550,1511,2790,324,2748,3107,3149
+DoS slowloris,5796,1437,14,6,7,933,4,929,4863,4867
+DoS Slowhttptest,5499,434,9,4,9,335,9,327,5164,5172
+Bot,1956,99,56,56,22,46,21,25,1910,1931
+Web Attack � Brute Force,1507,148,123,95,106,122,78,81,1385,1426
+Web Attack � XSS,652,31,29,27,26,27,26,1,625,651
+Infiltration,36,0,0,0,0,0,0,0,36,36
+Web Attack � Sql Injection,21,6,6,3,6,6,6,1,15,20
+Heartbleed,11,0,0,0,0,0,0,0,11,11

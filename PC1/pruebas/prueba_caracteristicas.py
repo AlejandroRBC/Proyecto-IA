@@ -46,15 +46,31 @@ def prueba_elimina_infinitos_y_nan():
 
 
 def prueba_duplicados_solo_sobre_caracteristicas():
-    # Mismas 10 características, distinta columna extra y distinta etiqueta:
-    # deben contarse como duplicados y quedarse solo la primera.
+    # Mismas 10 características y distinta columna extra: la columna extra no cuenta.
+    # (Cambio por la auditoría de duplicados: antes esta prueba también exigía que la
+    # fila DDoS se descartara en favor de la BENIGN; ahora se conservan ambas, ver la prueba siguiente.)
     a = fila(1)
-    b = fila(1, label="DDoS")
+    b = fila(1)
     b["Columna Extra"] = 123
     c = fila(2)
     limpio = limpiar(pd.DataFrame([a, b, c]), CARACTERISTICAS, "Label", verbose=False)
     assert len(limpio) == 2
     assert limpio["Label"].tolist() == ["BENIGN", "BENIGN"]
+
+
+def prueba_con_etiqueta_conserva_filas_iguales_con_distinta_etiqueta():
+    # Mismas características, distinta etiqueta: no son duplicados.
+    filas = [fila(1), fila(1, label="DDoS"), fila(1, label="DDoS"), fila(1)]
+    limpio = limpiar(pd.DataFrame(filas), CARACTERISTICAS, "Label", verbose=False)
+    assert limpio["Label"].tolist() == ["BENIGN", "DDoS"]
+
+
+def prueba_sin_etiqueta_deduplica_solo_por_caracteristicas():
+    # Sin columna_etiqueta el comportamiento es el de siempre.
+    filas = [fila(1), fila(1, label="DDoS"), fila(2)]
+    limpio = limpiar(pd.DataFrame(filas), CARACTERISTICAS, verbose=False)
+    assert len(limpio) == 2
+    assert "Label" not in limpio.columns
 
 
 def prueba_orden_fijo_de_columnas():
