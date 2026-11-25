@@ -147,21 +147,21 @@ def prueba_menu_compila_y_tiene_la_opcion_mixta():
     ruta = Path(__file__).resolve().parents[1] / "menu.py"
     py_compile.compile(str(ruta), doraise=True)
     texto = ruta.read_text(encoding="utf-8")
-    assert '"4": opcion_mixto' in texto and "6. Salir" in texto
+    assert '"4": opcion_mixto' in texto and '"5": opcion_aleatorio' in texto and "7. Salir" in texto
 
 
 # ---------- Verificación previa del servidor de PC1 ----------
 
 def prueba_verificar_servidor_acepta_los_archivos_de_la_demo():
     tamanos = {"/prueba.txt": 16, "/grande.bin": 262144}
-    assert verificar_servidor(_config(), lambda url: {"bytes": tamanos["/" + url.rsplit("/", 1)[1]]}) == {
+    assert verificar_servidor(_config(), lambda url: tamanos["/" + url.rsplit("/", 1)[1]]) == {
         "archivo_normal": 16, "archivo_grande": 262144}
 
 
 def prueba_verificar_servidor_rechaza_un_servidor_equivocado():
     """Un http.server de otra carpeta responde con una página de error de unos cientos de bytes."""
     with pytest.raises(ErrorConfiguracion, match="no es el archivo grande"):
-        verificar_servidor(_config(), lambda url: {"bytes": 203})
+        verificar_servidor(_config(), lambda url: 203)
 
 
 def prueba_verificar_servidor_explica_si_no_hay_servidor():
@@ -170,3 +170,38 @@ def prueba_verificar_servidor_explica_si_no_hay_servidor():
 
     with pytest.raises(ErrorConfiguracion, match="servidor_demo.py"):
         verificar_servidor(_config(), sin_servidor)
+
+
+def prueba_consultar_tamano_usa_head_y_no_descarga(tmp_path):
+    """Regresión: la verificación descargaba grande.bin y salía una alerta en plena fase normal."""
+    import functools
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+    from generador_trafico.trafico_normal import consultar_tamano_http
+
+    (tmp_path / "grande.bin").write_bytes(b"x" * 262144)
+    metodos = []
+
+    class Manejador(SimpleHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_HEAD(self):
+            metodos.append("HEAD")
+            super().do_HEAD()
+
+        def do_GET(self):
+            metodos.append("GET")
+            super().do_GET()
+
+    servidor = ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Manejador, directory=str(tmp_path)))
+    threading.Thread(target=servidor.serve_forever, daemon=True).start()
+    try:
+        config = _config()
+        config["http"] = {"puerto": servidor.server_address[1]}
+        url = f"http://127.0.0.1:{servidor.server_address[1]}/grande.bin"
+        assert consultar_tamano_http(config, url) == 262144
+        assert metodos == ["HEAD"]
+    finally:
+        servidor.shutdown()
+        servidor.server_close()

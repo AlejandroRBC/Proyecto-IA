@@ -161,6 +161,53 @@ def planificar_fases(config: dict, total=None) -> list:
     return [(nombre, total * p) for nombre, p in zip(FASES_MIXTO, parametros["proporciones"])]
 
 
+TIPOS_EPISODIO = ("descargas", "descargas_y_rafaga", "rafaga")
+
+
+def validar_parametros_aleatorio(config: dict) -> dict:
+    """Valida la sección 'aleatorio' (y la 'mixto', de la que toma archivos, pausas y topes)."""
+    mixto = validar_parametros_mixto(config)
+    al = (config or {}).get("aleatorio") or {}
+
+    def numero(clave, defecto, minimo, maximo):
+        valor = al.get(clave, defecto)
+        if isinstance(valor, bool) or not isinstance(valor, (int, float)) or not minimo <= valor <= maximo:
+            raise ErrorConfiguracion(f"'aleatorio.{clave}' debe ser un número entre {minimo} y {maximo} "
+                                     f"(valor actual: {valor!r}).")
+        return float(valor)
+
+    def rango(clave, defecto, minimo, maximo):
+        valor = al.get(clave, defecto)
+        if (not isinstance(valor, list) or len(valor) != 2
+                or any(isinstance(v, bool) or not isinstance(v, (int, float)) for v in valor)
+                or not minimo <= valor[0] <= valor[1] <= maximo):
+            raise ErrorConfiguracion(f"'aleatorio.{clave}' debe ser [mínimo, máximo] con "
+                                     f"{minimo} <= mínimo <= máximo <= {maximo} (valor actual: {valor!r}).")
+        return [float(valor[0]), float(valor[1])]
+
+    pesos = al.get("pesos_tipo_episodio", {"descargas": 0.5, "descargas_y_rafaga": 0.3, "rafaga": 0.2})
+    if (not isinstance(pesos, dict) or not pesos or any(t not in TIPOS_EPISODIO for t in pesos)
+            or any(isinstance(p, bool) or not isinstance(p, (int, float)) or p < 0 for p in pesos.values())
+            or sum(pesos.values()) <= 0):
+        raise ErrorConfiguracion(f"'aleatorio.pesos_tipo_episodio' debe asignar pesos >= 0 (no todos 0) a: "
+                                 f"{', '.join(TIPOS_EPISODIO)}.")
+    semilla = al.get("semilla")
+    if semilla is not None and (isinstance(semilla, bool) or not isinstance(semilla, int)):
+        raise ErrorConfiguracion("'aleatorio.semilla' debe ser un entero o null (aleatoria).")
+    descargas = rango("descargas_paralelas", [1, 3], 1, 10)
+    return {
+        **mixto,
+        "duracion_total_segundos": numero("duracion_total_segundos", 300, 10,
+                                          mixto["duracion_total_maxima_segundos"]),
+        "normal_al_inicio_y_final_segundos": numero("normal_al_inicio_y_final_segundos", 20, 0, 600),
+        "pausa_entre_episodios_segundos": rango("pausa_entre_episodios_segundos", [20, 60], 0, 1800),
+        "duracion_episodio_segundos": rango("duracion_episodio_segundos", [5, 20], 1, 300),
+        "descargas_paralelas_rango": [int(descargas[0]), int(descargas[1])],
+        "pesos_tipo_episodio": {t: float(p) for t, p in pesos.items()},
+        "semilla": semilla,
+    }
+
+
 def calcular_duracion_efectiva(duracion_solicitada, duracion_maxima) -> float:
     """Recorta siempre la duración pedida al máximo configurado (y al límite absoluto)."""
     tope = min(float(duracion_maxima), float(LIMITE_ABSOLUTO_RAFAGA_SEGUNDOS))

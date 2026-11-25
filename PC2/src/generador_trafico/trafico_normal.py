@@ -70,6 +70,21 @@ def construir_url_archivo(config: dict, ruta: str) -> str:
     return f"http://{host}:{puerto}{ruta}"
 
 
+def consultar_tamano_http(config: dict, url: str) -> int:
+    """Tamaño del archivo según PC1 (petición HEAD: no se descarga el contenido).
+
+    Lanza OSError (p. ej. HTTPError 404) si el archivo no está, igual que una descarga.
+    """
+    ip = validar_ip_destino(config)
+    partes = urlparse(url)
+    if partes.scheme != "http" or partes.hostname != ip:
+        raise ErrorConfiguracion(f"La URL '{url}' no apunta a PC1 ({ip}) por http.")
+    timeout = float((config.get("http") or {}).get("timeout_segundos", 5))
+    peticion = urllib.request.Request(url, method="HEAD")
+    with urllib.request.urlopen(peticion, timeout=timeout) as respuesta:
+        return int(respuesta.headers.get("Content-Length") or 0)
+
+
 def descargar_archivo_http(config: dict, url: str, silencioso: bool = False) -> dict:
     """Descarga `url` (solo si apunta a PC1). Requiere `python -m http.server` en PC1."""
     ip = validar_ip_destino(config)

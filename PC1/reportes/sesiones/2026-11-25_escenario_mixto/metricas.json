@@ -1,0 +1,15 @@
+{
+  "umbral": -0.15735438614690697,
+  "ip_pc2": "192.168.1.10",
+  "flujos": 4730,
+  "evaluables": 4687,
+  "verdaderos_positivos": 1579,
+  "falsos_positivos": 0,
+  "falsos_negativos": 2795,
+  "verdaderos_negativos": 313,
+  "precision": 1.0,
+  "recall": 0.3609967992684042,
+  "fpr": 0.0,
+  "recall_descargas_grandes": 0.96163215590743,
+  "fpr_descargas_pequenas": 0.0
+}

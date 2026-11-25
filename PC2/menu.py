@@ -17,8 +17,14 @@ from generador_trafico.configuracion import (  # noqa: E402
     planificar_fases,
     ruta_registro,
     validar_ip_destino,
+    validar_parametros_aleatorio,
     validar_parametros_mixto,
     validar_parametros_rafaga,
+)
+from generador_trafico.escenario_aleatorio import (  # noqa: E402
+    describir_plan,
+    ejecutar_escenario_aleatorio,
+    planificar_aleatorio,
 )
 from generador_trafico.escenario_mixto import ejecutar_escenario_mixto, verificar_servidor  # noqa: E402
 from generador_trafico.escaneo_puertos import escanear_puertos  # noqa: E402
@@ -37,8 +43,9 @@ OPCIONES = """
   2. Escanear puertos de PC1
   3. Generar ráfaga de conexiones
   4. Escenario mixto para la demo (normal -> anómalo -> normal)
-  5. Ver últimos escenarios registrados
-  6. Salir
+  5. Escenario aleatorio (normal continuo + episodios anómalos al azar)
+  6. Ver últimos escenarios registrados
+  7. Salir
 ==============================================================="""
 
 
@@ -142,6 +149,39 @@ def opcion_mixto(config: dict) -> None:
     print(f"\n  Escenario mixto terminado: {len(filas)} fases registradas en {ruta_registro(config)}.")
 
 
+def leer_numero(mensaje: str, defecto=None):
+    texto = input(mensaje).strip()
+    if not texto:
+        return defecto
+    try:
+        return float(texto)
+    except ValueError:
+        print("  Valor no numérico; se usa el valor por defecto.")
+        return defecto
+
+
+def opcion_aleatorio(config: dict) -> None:
+    ip = validar_ip_destino(config)
+    parametros = validar_parametros_aleatorio(config)
+    defecto, maximo = parametros["duracion_total_segundos"], parametros["duracion_total_maxima_segundos"]
+    total = leer_numero(f"  Duración total en segundos (Enter = {defecto:g}, máximo {maximo:g}): ")
+    if total is not None and total > maximo:
+        print(f"  Se pidió {total:g} s, pero el máximo es {maximo:g} s: se recorta.")
+    semilla = leer_numero("  Semilla (Enter = al azar; repite una ejecución anterior con su semilla): ")
+    semilla = None if semilla is None else int(semilla)
+    plan = planificar_aleatorio(config, total, semilla)   # se muestra antes de confirmar
+    print(describir_plan(plan))
+    tamanos = verificar_servidor(config)
+    print(f"  Servidor de PC1 correcto: {parametros['archivo_grande']} = {tamanos['archivo_grande']:,} B.")
+    if not confirmar_ataque(ip, "escenario aleatorio con episodios anómalos"):
+        print("  Cancelado.")
+        return
+    print("  (Ctrl+C para detenerlo; los tramos ya hechos quedan registrados)")
+    filas = ejecutar_escenario_aleatorio(config, plan["total"], plan["semilla"], mostrar_plan=False)
+    print(f"\n  Escenario aleatorio terminado (semilla {plan['semilla']}): {len(filas)} tramos registrados "
+          f"en {ruta_registro(config)}.")
+
+
 def opcion_ver_registro(config: dict) -> None:
     ruta = ruta_registro(config)
     filas = leer_ultimos_escenarios(ruta, 10)
@@ -155,7 +195,7 @@ def opcion_ver_registro(config: dict) -> None:
 
 
 ACCIONES = {"1": opcion_trafico_normal, "2": opcion_escaneo, "3": opcion_rafaga, "4": opcion_mixto,
-            "5": opcion_ver_registro}
+            "5": opcion_aleatorio, "6": opcion_ver_registro}
 
 
 def main() -> None:
@@ -175,8 +215,8 @@ def main() -> None:
         try:
             opcion = input("Elige una opción: ").strip()
         except EOFError:
-            opcion = "6"
-        if opcion == "6":
+            opcion = "7"
+        if opcion == "7":
             print("Hasta luego.")
             return
         accion = ACCIONES.get(opcion)

@@ -60,8 +60,9 @@ python menu.py
 | 2 | Escaneo de puertos | `nmap <argumentos_nmap> -p <inicial>-<final> <IP de PC1>` (por defecto `-sT`, puertos 1-1024; TCP connect, sin privilegios de administrador). Pide confirmación. |
 | 3 | Ráfaga de conexiones | Conexiones TCP rápidas y sucesivas con `socket` (sin Npcap ni administrador) a `rafagas.puerto_destino`, a `conexiones_por_segundo`, con `concurrencia` hilos, durante la duración indicada (máximo `duracion_maxima_segundos`). Pide confirmación. Ctrl+C la detiene antes. |
 | 4 | Escenario mixto | Para la presentación: fase normal (ping + descarga de `prueba.txt`), fase **anómala** (descargas en paralelo de `grande.bin`, ~256 KB, + ráfagas) y fase normal otra vez. 5 min por defecto (40/20/40 %), configurable en la sección `mixto` (tope 900 s; el programa no acepta más de 1800). Pide confirmación. Cada fase queda como fila `mixto_normal`/`mixto_anomalo` en el registro. Requiere `python scripts/servidor_demo.py` en PC1. |
-| 5 | Ver registro | Muestra los últimos 10 escenarios del CSV. |
-| 6 | Salir | |
+| 5 | Escenario aleatorio | Tráfico normal continuo y, encima, episodios anómalos en momentos, duraciones y tipos al azar (`descargas`, `descargas_y_rafaga`, `rafaga`), configurables en la sección `aleatorio`. Muestra el plan antes de confirmar; la semilla se imprime y se registra para repetir una ejecución. Cada tramo queda como fila `mixto_normal`/`mixto_anomalo`. |
+| 6 | Ver registro | Muestra los últimos 10 escenarios del CSV. |
+| 7 | Salir | |
 
 ### Descarga HTTP opcional (requisito manual en PC1)
 

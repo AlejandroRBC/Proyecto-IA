@@ -40,5 +40,16 @@ mixto:
   pausa_anomala_segundos: 0.2
   incluir_rafaga: true                  # ráfagas en la fase anómala (cada una <= rafagas.duracion_maxima_segundos)
 
+# Escenario aleatorio (opción 5): tráfico normal continuo (usa archivos y pausas de 'mixto')
+# y episodios anómalos en momentos, duraciones y tipos al azar.
+aleatorio:
+  duracion_total_segundos: 300            # tope: mixto.duracion_total_maxima_segundos
+  normal_al_inicio_y_final_segundos: 20   # margen solo normal al empezar y al terminar
+  pausa_entre_episodios_segundos: [20, 60]
+  duracion_episodio_segundos: [5, 20]
+  descargas_paralelas: [1, 3]             # intensidad de cada episodio con descargas
+  pesos_tipo_episodio: {descargas: 0.5, descargas_y_rafaga: 0.3, rafaga: 0.2}
+  semilla: null                           # null = al azar (se imprime para poder repetirla)
+
 registro:
   ruta_csv: "registros/escenarios_ejecutados.csv"   # relativa a la carpeta de este archivo

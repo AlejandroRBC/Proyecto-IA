@@ -48,6 +48,34 @@ conexión a conexión parece una conexión normal: es la limitación conocida de
 conviene explicarla en la presentación. Las alertas las producen las transferencias
 voluminosas y rápidas, que el modelo sí reconoce como raras.
 
+### 0b. Variante más natural: escenario aleatorio (opción 5)
+
+En vez de tres fases fijas, el tráfico normal corre **todo el tiempo** y los episodios
+anómalos aparecen en momentos, con duraciones y tipos al azar: solo descargas grandes,
+descargas + ráfaga, o solo ráfaga. Antes de confirmar se muestra el plan, por ejemplo:
+
+```
+Plan aleatorio (semilla 3, 120 s, 3 episodios anómalos):
+  1. a los 00:22 durante 13 s: descargas, 3 descargas en paralelo
+  2. a los 00:53 durante 14 s: descargas_y_rafaga, 2 descargas en paralelo
+  3. a los 01:20 durante 9 s: rafaga
+```
+
+Con la misma semilla se repite exactamente la misma ejecución. En el panel deben aparecer
+alertas solo durante los episodios con descargas; el episodio de solo ráfaga sirve para
+mostrar la limitación del modelo.
+
+### 0c. Guardar y analizar la sesión (en PC1, al terminar)
+
+```
+python scripts/analizar_sesion.py --desde "2026-11-25 16:40" --nombre mi_sesion
+```
+
+Guarda en `PC1/reportes/sesiones/mi_sesion/` (versionado en git) los flujos, las tablas
+por tipo de tráfico, la gráfica de puntajes en el tiempo y un `RESUMEN.md`. Si se copia
+antes `PC2/registros/escenarios_ejecutados.csv` a PC1 y se pasa con `--escenarios-pc2`,
+también se resume por tramo y se dibujan los episodios en la gráfica.
+
 ---
 
 ## 1. Datos que hay que poner
@@ -175,10 +203,11 @@ python menu.py
 | 3 | `3` Ráfaga | Duración: `10` (o Enter = 30) y `s` a la confirmación | `Ráfaga a <IP>:8080 durante 10.0 s - intentos: 200, exitosas: ...`. En PC1 la terminal del 8080 muestra muchos mensajes |
 | 4 | `3` Ráfaga | Duración: `120` | Mensaje `se recorta a 30 s`: demuestra el límite de seguridad. Se puede responder `n` para cancelar |
 | 5 | `4` Escenario mixto | Duración (Enter = 300 s) y `s` | Ver la sección 0 |
-| 6 | `5` Ver registro | — | Las filas de los pasos anteriores con hora de inicio/fin |
-| 7 | `6` Salir | — | — |
+| 6 | `5` Escenario aleatorio | Duración, semilla (Enter = al azar) y `s` | Ver la sección 0b |
+| 7 | `6` Ver registro | — | Las filas de los pasos anteriores con hora de inicio/fin |
+| 8 | `7` Salir | — | — |
 
-Antes de los pasos 2, 3 y 5 el programa muestra la IP destino y pide confirmar: **comprobar que
+Antes de los pasos 2, 3, 5 y 6 el programa muestra la IP destino y pide confirmar: **comprobar que
 es la IP de PC1** antes de responder `s`.
 
 ### Demostrar la protección de la IP (opcional)
@@ -192,6 +221,8 @@ es la IP de PC1** antes de responder `s`.
 
 - `PC2/registros/escenarios_ejecutados.csv`: horas de inicio y fin de cada escenario. Es la
   referencia para cruzar con `PC1/datos/en_vivo/flujos_analizados.csv`.
+- **Lo más cómodo:** `python scripts/analizar_sesion.py` en PC1 (sección 0c), que guarda todo
+  lo necesario en `PC1/reportes/sesiones/`.
 - De PC1: `datos/en_vivo/flujos_analizados.csv`, `alertas.csv` y `flujos_capturados.csv`
   (este último tiene las características de cada flujo y servirá para un modelo del laboratorio).
 - Capturas de pantalla de la terminal de PC2 y de las terminales `http.server` de PC1.

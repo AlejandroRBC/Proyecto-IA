@@ -30,7 +30,8 @@ PC1/
 │   ├── reproducir_flujos.py       # demo de monitoreo simulado
 │   ├── capturar_en_vivo.py        # captura real en vivo (Npcap + scapy)
 │   ├── entrenar_modelo_laboratorio.py  # modelo con tráfico normal del laboratorio
-│   └── servidor_demo.py           # servidor HTTP de la demo con PC2 (puertos 8000 y 8080)
+│   ├── servidor_demo.py           # servidor HTTP de la demo con PC2 (puertos 8000 y 8080)
+│   └── analizar_sesion.py         # guarda y analiza una sesión en reportes/sesiones/
 └── pruebas/                  # pruebas con pytest y datos simulados
 ```
 
@@ -351,6 +352,38 @@ flujos con IPs, un resumen por IP de origen y las alertas.
 el del laboratorio. En una prueba real, descargas HTTP normales salieron como
 anómalas, y no se espera que detecte ráfagas ni escaneos (en CICIDS2017 detecta 0 %
 de PortScan y DoS). Las alertas en vivo deben leerse con esa limitación.
+
+## Sesiones guardadas (`scripts/analizar_sesion.py`)
+
+Guarda una sesión de captura con PC2 en `reportes/sesiones/<nombre>/` (versionado en git):
+`flujos.csv`, `resumen_por_tipo.csv`, `metricas.json`, `puntajes.png` y `RESUMEN.md`; y,
+con `--escenarios-pc2`, `resumen_por_tramo.csv` y los episodios dibujados en la gráfica.
+
+```
+python scripts/analizar_sesion.py --desde "2026-11-25 16:40" --nombre 2026-11-25_escenario_mixto
+```
+
+Cada flujo se clasifica por su **forma** (puerto y bytes), no por la hora: descarga
+pequeña (tráfico normal), descarga grande (≥ 20 KB, ataque simulado), ráfaga, ping u otro.
+Se reconocen también los flujos capturados "al revés" (cuando Npcap pierde el SYN inicial y
+el primer paquete visto es del servidor).
+
+**Sesión real del 25/11/2026** (`reportes/sesiones/2026-11-25_escenario_mixto/`, PC2 =
+192.168.1.10 por Wi-Fi, escenario mixto, modelo base):
+
+| Tráfico de PC2 | Flujos | Marcados anómalos |
+|---|---|---|
+| Descarga pequeña (normal) | 297 | 0 % |
+| Ping | 5 | 0 % |
+| Otro (SSDP, NetBIOS) | 15 | 0 % |
+| **Descarga grande (ataque simulado)** | 1.642 | **96,2 %** |
+| Ráfaga | 2.771 | 0 % |
+
+Ningún falso positivo en el tráfico normal (precision 100 %, FPR 0 %). Las descargas
+grandes no marcadas (3,8 %) quedan justo por encima del umbral y suelen ser capturas
+incompletas. La ráfaga sigue sin detectarse, como se esperaba. Las 3 alertas aisladas de
+esa sesión fuera de las fases anómalas eran la verificación previa de PC2, que descargaba
+`grande.bin` completo; ahora solo pide su tamaño (`HEAD`) y ya no genera alertas.
 
 ## Modelo de laboratorio (`scripts/entrenar_modelo_laboratorio.py`)
 

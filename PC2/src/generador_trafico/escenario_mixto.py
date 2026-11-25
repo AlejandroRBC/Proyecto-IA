@@ -29,7 +29,12 @@ from .configuracion import (
 )
 from .rafagas import generar_rafaga
 from .registrador import ahora, ip_local_hacia, registrar_escenario
-from .trafico_normal import construir_url_archivo, descargar_archivo_http, ping_una_vez
+from .trafico_normal import (
+    construir_url_archivo,
+    consultar_tamano_http,
+    descargar_archivo_http,
+    ping_una_vez,
+)
 
 TIPO_NORMAL = "mixto_normal"
 TIPO_ANOMALO = "mixto_anomalo"
@@ -38,22 +43,25 @@ TIPO_ANOMALO = "mixto_anomalo"
 TAMANO_MINIMO_GRANDE_BYTES = 100_000   # por debajo de esto no es el grande.bin de la demo
 
 
-def verificar_servidor(config: dict, descargar=None) -> dict:
+def verificar_servidor(config: dict, consultar=None) -> dict:
     """Comprueba, antes de empezar, que PC1 sirve de verdad el archivo normal y el grande.
 
     Un servidor equivocado (p. ej. un ``python -m http.server`` abierto en otra carpeta)
-    responde 404 con ~200-500 bytes: el escenario correría sin generar ninguna
-    transferencia grande y el panel no mostraría alertas.
+    responde 404: el escenario correría sin generar ninguna transferencia grande y el
+    panel no mostraría alertas.
+
+    Solo pide el tamaño (HEAD), sin descargar el archivo: una descarga completa de
+    grande.bin aquí aparecía como una alerta en plena fase normal.
     """
     ip = validar_ip_destino(config)
     parametros = validar_parametros_mixto(config)
-    descargar = descargar or (lambda url: descargar_archivo_http(config, url, silencioso=True))
+    consultar = consultar or (lambda url: consultar_tamano_http(config, url))
     tamanos = {}
     for clave in ("archivo_normal", "archivo_grande"):
         ruta = parametros[clave]
         url = construir_url_archivo(config, ruta)
         try:
-            tamanos[clave] = int(descargar(url)["bytes"])
+            tamanos[clave] = int(consultar(url))
         except OSError as e:
             raise ErrorConfiguracion(
                 f"PC1 ({ip}) no entrega {ruta}: {e}. En PC1 ejecuta `python scripts/servidor_demo.py` "
