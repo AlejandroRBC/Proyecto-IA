@@ -23,10 +23,15 @@ COLUMNAS_ALERTA = [
 ]
 
 # Historial completo (todos los flujos evaluados, no solo las alertas).
+# ip_origen, ip_destino y puerto_origen se llenan con la captura en vivo
+# (en la demo con CSV quedan vacías porque el dataset no trae IPs).
 COLUMNAS_HISTORIAL = [
     "fecha_hora",
     "id_flujo",
     "archivo_origen",
+    "ip_origen",
+    "ip_destino",
+    "puerto_origen",
     "puerto_destino",
     "score",
     "umbral",
@@ -62,6 +67,7 @@ def _agregar_fila(ruta_csv: str | Path, columnas: list[str], info: dict) -> None
     """
     ruta = Path(ruta_csv)
     ruta.parent.mkdir(parents=True, exist_ok=True)
+    _respaldar_si_cambio_encabezado(ruta, columnas)
     escribir_encabezado = not ruta.exists() or ruta.stat().st_size == 0
 
     fila = {c: info.get(c) for c in columnas}
@@ -74,6 +80,24 @@ def _agregar_fila(ruta_csv: str | Path, columnas: list[str], info: dict) -> None
         if escribir_encabezado:
             escritor.writeheader()
         escritor.writerow(fila)
+
+
+def _respaldar_si_cambio_encabezado(ruta: Path, columnas: list[str]) -> Path | None:
+    """Si el CSV existe con otras columnas (versión anterior), lo renombra a un respaldo.
+
+    Así nunca se mezclan filas con formatos distintos en el mismo archivo.
+    Devuelve la ruta del respaldo o ``None`` si no hizo falta.
+    """
+    if not ruta.exists() or ruta.stat().st_size == 0:
+        return None
+    with open(ruta, newline="", encoding="utf-8") as f:
+        encabezado = next(csv.reader(f), [])
+    if encabezado == columnas:
+        return None
+    marca = datetime.now().strftime("%Y%m%d-%H%M%S")
+    respaldo = ruta.with_name(f"{ruta.stem}.anterior-{marca}{ruta.suffix}")
+    ruta.rename(respaldo)
+    return respaldo
 
 
 def procesar_resultado(ruta_csv: str | Path, fila_evaluada: dict) -> bool:

@@ -4,8 +4,10 @@ PC2 genera tráfico de prueba **exclusivamente hacia PC1** (normal y simulando a
 constancia en un CSV de cuándo y con qué parámetros lo hizo, para correlacionarlo después con
 lo que se registre en PC1.
 
-> **Importante:** PC2 **no reemplaza la captura real en PC1**. La captura de flujos con
-> CICFlowMeter en PC1 sigue pendiente (fase futura). PC2 solo genera el tráfico y anota cuándo lo hizo.
+> **Importante:** PC2 solo genera el tráfico y anota cuándo lo hizo. La captura y la
+> detección ocurren en PC1 (`PC1/scripts/capturar_en_vivo.py` + panel Streamlit).
+
+Para la demo entre las dos máquinas, paso a paso: ver [GUIA_DEMO.md](GUIA_DEMO.md).
 
 ## Requisitos
 
@@ -27,7 +29,7 @@ Editar `configuracion.yaml` y completar:
 
 ```yaml
 red:
-  ip_destino_pc1: "192.168.1.10"   # IP real de PC1 en la red de laboratorio
+  ip_destino_pc1: "192.168.1.7"    # IP real de PC1 en la red de laboratorio
 ```
 
 Reglas de seguridad que aplica el programa:

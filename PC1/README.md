@@ -23,11 +23,12 @@ PC1/
 │   ├── procesamiento/        # dataset.py (carga) y caracteristicas.py (limpieza)
 │   ├── modelo/               # entrenar.py, evaluar.py y detector.py
 │   ├── alertas/              # gestor_alertas.py
-│   ├── captura/              # pendiente, fase siguiente
-│   └── app/                  # pendiente, fase siguiente
+│   ├── captura/              # flujos.py (paquetes → flujos) y capturador.py (scapy + detector)
+│   └── app/                  # panel.py (Streamlit) y datos_panel.py
 ├── scripts/
 │   ├── ejecutar_experimentos.py   # entrenamiento + evaluación
-│   └── reproducir_flujos.py       # demo de monitoreo simulado
+│   ├── reproducir_flujos.py       # demo de monitoreo simulado
+│   └── capturar_en_vivo.py        # captura real en vivo (Npcap + scapy)
 └── pruebas/                  # pruebas con pytest y datos simulados
 ```
 
@@ -286,6 +287,63 @@ Desde consola, lo mismo se hace con `--etiqueta Heartbleed`.
 amarillo para el umbral hipotético. Están validados para daltonismo, y la forma del
 marcador y las etiquetas de texto hacen que no dependan solo del color.
 
+## Captura en vivo (`scripts/capturar_en_vivo.py`)
+
+Convierte el tráfico real que llega a PC1 (por ejemplo, el que genera PC2) en
+flujos, calcula las 10 características y los evalúa con el mismo detector y umbral.
+
+**Requisitos:** [Npcap](https://npcap.com) instalado en PC1 y `scapy`
+(`pip install -r requirements.txt`). Si Npcap se instaló con la opción
+*"Restrict Npcap driver's access to Administrators only"*, abrir la terminal
+como administrador.
+
+```
+python scripts/capturar_en_vivo.py --listar-interfaces   # ver el nombre de la interfaz
+python scripts/capturar_en_vivo.py                       # solo tráfico con PC2 (Ctrl+C para detener)
+python scripts/capturar_en_vivo.py --ip-pc2 192.168.1.20 # si cambió la IP de PC2
+python scripts/capturar_en_vivo.py --todo-el-trafico     # todo el tráfico IPv4 de la interfaz
+python scripts/capturar_en_vivo.py --duracion 60 --solo-alertas
+```
+
+Configuración en `configuracion.yaml`, sección `captura`: `interfaz` (`Wi-Fi`),
+`ip_pc2`, `solo_trafico_pc2`, `timeout_inactividad_segundos` (5),
+`timeout_activo_segundos` (120) y `refresco_panel_segundos` (2).
+
+**Cómo se arman los flujos** (`src/captura/flujos.py`, imitando CICFlowMeter):
+
+- Un flujo es bidireccional (IPs + puertos + protocolo). El primer paquete define
+  el sentido *forward* y el `Destination Port`.
+- `Flow Duration` y `Flow IAT Mean` en microsegundos; `Total Length of Fwd/Bwd
+  Packets` en bytes de carga útil; tasas por segundo sobre la duración.
+- Un flujo TCP se cierra con RST o con FIN de ambos lados; cualquier flujo se
+  cierra tras 5 s sin paquetes o 120 s de duración. El ICMP (ping) usa puerto 0.
+- Un flujo de un solo paquete tiene duración 0 y tasas infinitas, igual que en el
+  dataset, así que queda `NO_EVALUABLE`.
+- Es una aproximación propia (no es CICFlowMeter): los valores pueden diferir en
+  casos borde como retransmisiones o conexiones ya abiertas al iniciar la captura.
+
+**Salidas** (en `datos/en_vivo/`):
+
+| Archivo | Contenido |
+|---|---|
+| `flujos_analizados.csv` | Historial de todos los flujos (`archivo_origen = captura_en_vivo`), ahora con `ip_origen`, `ip_destino` y `puerto_origen` |
+| `alertas.csv` | Solo los anómalos |
+| `flujos_capturados.csv` | Las 10 características crudas de cada flujo + resultado (para revisarlas o entrenar un modelo del laboratorio) |
+| `estado_captura.json` | Estado del capturador, lo lee el panel |
+
+Si `flujos_analizados.csv` tenía el formato anterior (sin columnas de IP), se
+renombra a `flujos_analizados.anterior-<fecha>.csv` y se empieza uno nuevo.
+
+**Panel:** con la captura corriendo en una terminal, `streamlit run src/app/panel.py`
+en otra. La sección **Monitoreo en vivo** se actualiza sola cada 2 s y muestra el
+estado de la captura, conteos, puntajes de los últimos 300 flujos, los últimos
+flujos con IPs, un resumen por IP de origen y las alertas.
+
+**Advertencia:** el modelo se entrenó con el tráfico normal de CICIDS2017, no con
+el del laboratorio. En una prueba real, descargas HTTP normales salieron como
+anómalas, y no se espera que detecte ráfagas ni escaneos (en CICIDS2017 detecta 0 %
+de PortScan y DoS). Las alertas en vivo deben leerse con esa limitación.
+
 ## Reproducibilidad
 
 Todas las semillas están fijas (`random_state=42`). Correr el pipeline dos veces da
@@ -293,7 +351,6 @@ el mismo umbral y las mismas métricas. Solo cambia `fecha_entrenamiento` en los
 
 ## Pendiente (no incluido en esta tarea)
 
-- **Captura real con CICFlowMeter/Npcap** (`src/captura/`): reemplazará a
-  `reproducir_flujos.py` como fuente de flujos. Usará las mismas funciones
-  `preparar_flujo_para_prediccion` y `evaluar_flujo`, y llenará los campos de IP.
-- **PC2**: no se desarrolla aquí.
+- **Modelo del laboratorio:** entrenar un Isolation Forest con tráfico normal
+  capturado en el laboratorio (`flujos_capturados.csv`), separado del modelo base.
+- **PC2** (generador de tráfico) está en `../PC2/`.

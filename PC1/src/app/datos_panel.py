@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import matplotlib
@@ -197,3 +198,60 @@ def figura_puntajes(
     ax.legend(loc="lower left", fontsize=9, frameon=False, ncol=4, bbox_to_anchor=(0, 1.0))
     fig.tight_layout()
     return fig
+
+
+# ---------------------------------------------------------------------------
+# Monitoreo en vivo (scripts/capturar_en_vivo.py)
+# ---------------------------------------------------------------------------
+ORIGEN_CAPTURA = "captura_en_vivo"
+COLUMNAS_VIVO = ["fecha_hora", "ip_origen", "puerto_origen", "ip_destino", "puerto_destino",
+                 "score", "resultado"]
+
+
+def leer_estado_captura(ruta: Path) -> dict | None:
+    """Lee el JSON de estado que escribe el capturador (``None`` si no existe o está a medias)."""
+    try:
+        with open(ruta, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def captura_activa(estado: dict | None, ahora: datetime | None = None, tolerancia_segundos: float = 5) -> bool:
+    """La captura está activa si el capturador lo dice y actualizó el estado hace poco.
+
+    Si el proceso se cerró de golpe, ``activo`` queda en true pero la fecha deja
+    de avanzar; por eso también se mira la antigüedad.
+    """
+    if not estado or not estado.get("activo") or not estado.get("actualizado"):
+        return False
+    try:
+        actualizado = datetime.fromisoformat(estado["actualizado"])
+    except (TypeError, ValueError):
+        return False
+    ahora = ahora or datetime.now()
+    return (ahora - actualizado).total_seconds() <= tolerancia_segundos
+
+
+def flujos_en_vivo(historial: pd.DataFrame | None) -> pd.DataFrame:
+    """Solo las filas del historial que vienen de la captura real (no de la demo con CSV)."""
+    if historial is None or "archivo_origen" not in historial.columns:
+        return pd.DataFrame(columns=COLUMNAS_VIVO)
+    vivo = historial[historial["archivo_origen"].astype(str) == ORIGEN_CAPTURA].copy()
+    for columna in COLUMNAS_VIVO:
+        if columna not in vivo.columns:
+            vivo[columna] = None
+    return vivo.reset_index(drop=True)
+
+
+def resumen_por_ip_origen(vivo: pd.DataFrame) -> pd.DataFrame:
+    """Flujos y anómalos por IP de origen, para ver de un vistazo quién genera qué."""
+    if vivo.empty:
+        return pd.DataFrame(columns=["IP origen", "Flujos", "Anómalos", "Proporción anómala"])
+    resultado = vivo["resultado"].astype(str)
+    tabla = (vivo.assign(anomalo=(resultado == "ANOMALO").astype(int))
+             .groupby(vivo["ip_origen"].fillna("(desconocida)").astype(str))
+             .agg(Flujos=("anomalo", "size"), Anómalos=("anomalo", "sum")))
+    tabla["Proporción anómala"] = tabla["Anómalos"] / tabla["Flujos"]
+    tabla = tabla.sort_values(["Flujos", "Anómalos"], ascending=False).reset_index()
+    return tabla.rename(columns={"ip_origen": "IP origen"})

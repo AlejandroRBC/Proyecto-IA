@@ -9,6 +9,9 @@ rutas:
   figuras: reportes/figuras
   alertas: datos/en_vivo/alertas.csv
   flujos_analizados: datos/en_vivo/flujos_analizados.csv
+  # Captura en vivo (scripts/capturar_en_vivo.py)
+  flujos_capturados: datos/en_vivo/flujos_capturados.csv
+  estado_captura: datos/en_vivo/estado_captura.json
   # Experimento log1p: rutas separadas para no sobrescribir el modelo base.
   modelos_log1p: modelos/log1p
   reportes_log1p: reportes/log1p
@@ -64,6 +67,15 @@ demo:
   filas_por_archivo: 25
   intervalo_segundos: 0.5
   semilla: 42
+
+# Captura en vivo (scripts/capturar_en_vivo.py). Requiere Npcap.
+captura:
+  interfaz: "Wi-Fi"          # ver: python scripts/capturar_en_vivo.py --listar-interfaces
+  ip_pc2: "192.168.1.10"     # IP actual de PC2 (cambiará; también se puede pasar --ip-pc2)
+  solo_trafico_pc2: true     # false o --todo-el-trafico para capturar todo lo de la interfaz
+  timeout_inactividad_segundos: 5   # cierra un flujo tras N s sin paquetes
+  timeout_activo_segundos: 120      # duración máxima de un flujo (como CICFlowMeter)
+  refresco_panel_segundos: 2        # cada cuánto se actualiza "Monitoreo en vivo"
 
 archivos_salida:
   modelo: isolation_forest.joblib

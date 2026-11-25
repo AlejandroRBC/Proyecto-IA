@@ -3,7 +3,8 @@
 Uso (desde PC1/):  streamlit run src/app/panel.py
 
 El panel no carga el modelo ni calcula puntajes. Lee los CSV que generan
-``evaluar.py`` y ``reproducir_flujos.py``, y lanza la demo como subproceso.
+``evaluar.py``, ``reproducir_flujos.py`` y ``capturar_en_vivo.py``, y lanza la
+demo con CSV como subproceso. La captura en vivo se ejecuta aparte.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import streamlit as st
 
 # Permite importar el paquete ``src`` al ejecutar con ``streamlit run``.
@@ -22,6 +24,11 @@ from src.app import datos_panel as dp  # noqa: E402
 from src.procesamiento.dataset import cargar_configuracion  # noqa: E402
 
 st.set_page_config(page_title="CyberGuard AI", page_icon="🛡️", layout="wide")
+
+
+def plt_cerrar() -> None:
+    """Libera las figuras: la sección en vivo crea una cada pocos segundos."""
+    plt.close("all")
 
 
 @st.cache_data(show_spinner=False)
@@ -122,6 +129,71 @@ if corrida:
         st.code((corrida["salida"] or "") + ("\n" + corrida["errores"] if corrida["errores"] else ""),
                 language="text")
 
+# --- Monitoreo en vivo -------------------------------------------------------
+st.header("Monitoreo en vivo")
+captura_cfg = config.get("captura") or {}
+st.caption("Tráfico real capturado en esta máquina por `scripts/capturar_en_vivo.py`, que se "
+           "ejecuta aparte en otra terminal. Este panel solo lee los resultados.")
+auto = st.toggle("Actualizar automáticamente", value=True,
+                 help=f"Relee los resultados cada {captura_cfg.get('refresco_panel_segundos', 2)} s.")
+
+
+@st.fragment(run_every=float(captura_cfg.get("refresco_panel_segundos", 2)) if auto else None)
+def seccion_en_vivo() -> None:
+    estado = dp.leer_estado_captura(config["rutas"]["estado_captura"])
+    if dp.captura_activa(estado):
+        st.success(f"Captura activa en **{estado['interfaz']}** · filtro `{estado['filtro']}` · "
+                   f"desde {estado['inicio'][11:19]} · {estado['paquetes']:,} paquetes · "
+                   f"{estado['flujos_activos']} flujos abiertos")
+    else:
+        ip_pc2 = captura_cfg.get("ip_pc2") or "<IP de PC2>"
+        st.info("La captura no está corriendo. En otra terminal, desde `PC1/`:\n\n"
+                "```\npython scripts/capturar_en_vivo.py\n```\n"
+                f"(por defecto solo captura el tráfico con PC2, `{ip_pc2}`).")
+
+    historial_vivo, _ = dp.leer_csv(config["rutas"]["flujos_analizados"])
+    vivo = dp.flujos_en_vivo(historial_vivo)
+    if vivo.empty:
+        st.caption("Aún no hay flujos capturados en el historial.")
+        return
+
+    conteo_vivo = dp.conteos(vivo)
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Flujos capturados", f"{conteo_vivo['total']:,}")
+    c2.metric("Normales", f"{conteo_vivo['normales']:,}")
+    c3.metric("Anómalos", f"{conteo_vivo['anomalos']:,}")
+    c4.metric("No evaluables", f"{conteo_vivo['no_evaluables']:,}",
+              help="Flujos de un solo paquete (duración 0): sus tasas por segundo son infinitas, "
+                   "igual que en el dataset, y el modelo no los evalúa.")
+
+    recientes = vivo.tail(300)
+    if umbral is not None and not dp.puntajes(recientes).empty:
+        st.pyplot(dp.figura_puntajes(recientes, umbral), width="stretch")
+        plt_cerrar()
+        st.caption("Últimos 300 flujos capturados, en orden de llegada.")
+
+    izquierda, derecha = st.columns([3, 2])
+    with izquierda:
+        st.subheader("Últimos flujos")
+        st.dataframe(recientes[dp.COLUMNAS_VIVO].iloc[::-1].head(50), hide_index=True, width="stretch",
+                     column_config={"score": st.column_config.NumberColumn(format="%.4f")})
+    with derecha:
+        st.subheader("Por IP de origen")
+        st.dataframe(dp.resumen_por_ip_origen(vivo), hide_index=True, width="stretch",
+                     column_config={"Proporción anómala": st.column_config.ProgressColumn(
+                         format="percent", min_value=0.0, max_value=1.0)})
+
+    anomalos_vivo = vivo[vivo["resultado"].astype(str) == "ANOMALO"]
+    st.subheader(f"Alertas en vivo ({len(anomalos_vivo):,})")
+    if anomalos_vivo.empty:
+        st.caption("Ningún flujo capturado cruzó el umbral.")
+    else:
+        st.dataframe(anomalos_vivo[dp.COLUMNAS_VIVO].iloc[::-1].head(100), hide_index=True,
+                     width="stretch", column_config={"score": st.column_config.NumberColumn(format="%.4f")})
+
+
+seccion_en_vivo()
+
 # --- Estado del modelo -------------------------------------------------------
 st.header("Estado del modelo")
 if metricas is None:
@@ -187,7 +259,8 @@ else:
     if alertas is None:
         st.info("No hay alertas registradas: ningún flujo analizado cruzó el umbral.")
     else:
-        columnas = [c for c in ["fecha_hora", "id_flujo", "puerto_destino", "score", "resultado"]
+        columnas = [c for c in ["fecha_hora", "id_flujo", "ip_origen", "ip_destino", "puerto_destino",
+                                 "score", "resultado"]
                     if c in alertas.columns]
         st.dataframe(alertas[columnas].iloc[::-1].head(100), hide_index=True, width="stretch",
                      column_config={"score": st.column_config.NumberColumn(format="%.4f")})
