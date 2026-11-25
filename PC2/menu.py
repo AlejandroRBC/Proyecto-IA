@@ -20,7 +20,7 @@ from generador_trafico.configuracion import (  # noqa: E402
     validar_parametros_mixto,
     validar_parametros_rafaga,
 )
-from generador_trafico.escenario_mixto import ejecutar_escenario_mixto  # noqa: E402
+from generador_trafico.escenario_mixto import ejecutar_escenario_mixto, verificar_servidor  # noqa: E402
 from generador_trafico.escaneo_puertos import escanear_puertos  # noqa: E402
 from generador_trafico.rafagas import generar_rafaga  # noqa: E402
 from generador_trafico.registrador import (  # noqa: E402
@@ -131,6 +131,9 @@ def opcion_mixto(config: dict) -> None:
     print(f"  Fase anómala: {parametros['descargas_paralelas']} descargas en paralelo de "
           f"{parametros['archivo_grande']}" + (" + ráfagas de conexiones" if parametros["incluir_rafaga"] else ""))
     print("  Requiere en PC1: python scripts/servidor_demo.py (sirve los archivos en los puertos 8000 y 8080).")
+    tamanos = verificar_servidor(config)   # falla con un mensaje claro si PC1 no sirve los archivos
+    print(f"  Servidor de PC1 correcto: {parametros['archivo_normal']} = {tamanos['archivo_normal']} B, "
+          f"{parametros['archivo_grande']} = {tamanos['archivo_grande']:,} B.")
     if not confirmar_ataque(ip, "escenario mixto con fase anómala"):
         print("  Cancelado.")
         return

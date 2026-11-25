@@ -13,6 +13,7 @@ from src.alertas.gestor_alertas import COLUMNAS_HISTORIAL, registrar_flujo_anali
 from src.app import datos_panel as dp
 from src.captura.capturador import (
     ORIGEN_CAPTURA,
+    escribir_estado,
     construir_filtro,
     convertir_paquete,
     evaluar_flujos,
@@ -237,3 +238,19 @@ def prueba_flujos_en_vivo_y_resumen_por_ip():
     assert (fila["Flujos"], fila["Anómalos"], fila["Proporción anómala"]) == (2, 1, 0.5)
     assert dp.flujos_en_vivo(None).empty
     assert dp.flujos_en_vivo(historial.drop(columns="archivo_origen")).empty
+
+
+def prueba_escribir_estado_no_falla_si_el_panel_tiene_el_archivo_abierto(tmp_path):
+    """Regresión: [WinError 5] al renombrar estado_captura.tmp mientras el panel lo leía."""
+    ruta = tmp_path / "estado_captura.json"
+    assert escribir_estado(ruta, {"activo": True, "n": 1})
+    with open(ruta, encoding="utf-8"):          # el panel tiene el archivo abierto
+        assert escribir_estado(ruta, {"activo": True, "n": 2})
+    assert json.loads(ruta.read_text(encoding="utf-8"))["n"] == 2
+    assert not (tmp_path / "estado_captura.tmp").exists()
+
+
+def prueba_escribir_estado_devuelve_false_en_vez_de_lanzar(tmp_path):
+    bloqueo = tmp_path / "es_un_archivo"
+    bloqueo.write_text("x", encoding="utf-8")
+    assert escribir_estado(bloqueo / "estado.json", {"activo": True}) is False   # el "directorio" es un archivo

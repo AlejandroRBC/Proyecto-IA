@@ -224,7 +224,9 @@ Para el modelo de laboratorio de PC1 hace falta una sesión más larga con tráf
 | nmap: `Host seems down` | PC1 no responde al ping de descubrimiento | Habilitar el ping en PC1, o usar `argumentos_nmap: "-sT -Pn"` |
 | Ráfaga con todo en `errores` | Firewall de PC1 descarta el puerto 8080 | Levantar el `http.server 8080` y permitirlo en el firewall |
 | Ráfaga con todo en `rechazadas` | Nada escucha en 8080 en PC1 | Normal si no se levantó el servidor; igual genera tráfico |
-| Escenario mixto: `Aviso: hubo errores` | `servidor_demo.py` no está corriendo en PC1 | Levantarlo; sin `grande.bin` no hay alertas |
+| Escenario mixto: `No se ejecutó el escenario: PC1 ... no entrega /grande.bin` o `mide solo N bytes` | En PC1 no corre `servidor_demo.py`, o hay otro `http.server` (de otra carpeta) ocupando el 8000 | En PC1: cerrar todos los `http.server` y ejecutar `python scripts/servidor_demo.py`. PC2 lo comprueba antes de empezar |
+| El panel no muestra alertas aunque PC2 termine | Se descargó un archivo pequeño en vez de `grande.bin` (servidor equivocado) o la captura se cayó | Ver arriba; la captura debe seguir viva (`Captura activa`) durante toda la fase anómala |
+| | Escenario mixto: `Aviso: hubo errores` | `servidor_demo.py` no está corriendo en PC1 | Levantarlo; sin `grande.bin` no hay alertas |
 | `servidor_demo.py`: puerto ocupado | Ya hay un `http.server` en 8000/8080 | Cerrarlo (Ctrl+C en su terminal) |
 
 ---

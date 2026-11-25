@@ -20,6 +20,7 @@ import threading
 import time
 
 from .configuracion import (
+    ErrorConfiguracion,
     planificar_fases,
     ruta_registro,
     validar_ip_destino,
@@ -32,6 +33,37 @@ from .trafico_normal import construir_url_archivo, descargar_archivo_http, ping_
 
 TIPO_NORMAL = "mixto_normal"
 TIPO_ANOMALO = "mixto_anomalo"
+
+
+TAMANO_MINIMO_GRANDE_BYTES = 100_000   # por debajo de esto no es el grande.bin de la demo
+
+
+def verificar_servidor(config: dict, descargar=None) -> dict:
+    """Comprueba, antes de empezar, que PC1 sirve de verdad el archivo normal y el grande.
+
+    Un servidor equivocado (p. ej. un ``python -m http.server`` abierto en otra carpeta)
+    responde 404 con ~200-500 bytes: el escenario correría sin generar ninguna
+    transferencia grande y el panel no mostraría alertas.
+    """
+    ip = validar_ip_destino(config)
+    parametros = validar_parametros_mixto(config)
+    descargar = descargar or (lambda url: descargar_archivo_http(config, url, silencioso=True))
+    tamanos = {}
+    for clave in ("archivo_normal", "archivo_grande"):
+        ruta = parametros[clave]
+        url = construir_url_archivo(config, ruta)
+        try:
+            tamanos[clave] = int(descargar(url)["bytes"])
+        except OSError as e:
+            raise ErrorConfiguracion(
+                f"PC1 ({ip}) no entrega {ruta}: {e}. En PC1 ejecuta `python scripts/servidor_demo.py` "
+                "(y cierra cualquier otro `http.server` abierto en los puertos 8000 y 8080).") from None
+    if tamanos["archivo_grande"] < TAMANO_MINIMO_GRANDE_BYTES:
+        raise ErrorConfiguracion(
+            f"{parametros['archivo_grande']} mide solo {tamanos['archivo_grande']} bytes: no es el archivo "
+            "grande de la demo y no habrá alertas. En PC1 cierra los `http.server` abiertos y ejecuta "
+            "`python scripts/servidor_demo.py`.")
+    return tamanos
 
 
 class Contador:

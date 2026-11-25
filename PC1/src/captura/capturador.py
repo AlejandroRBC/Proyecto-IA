@@ -130,13 +130,30 @@ def registrar_evaluados(evaluados: list[dict], rutas: dict) -> None:
                                for k in COLUMNAS_FLUJOS_CAPTURADOS})
 
 
-def escribir_estado(ruta: Path, estado: dict) -> None:
-    """Archivo JSON que lee el panel para saber si la captura está activa."""
+def escribir_estado(ruta: Path, estado: dict) -> bool:
+    """Escribe el JSON de estado que lee el panel. Nunca lanza: devuelve si pudo escribir.
+
+    En Windows no se puede renombrar un archivo mientras otro proceso (el panel, cada
+    2 s) lo tiene abierto, y ese fallo no debe detener la captura. Se reintenta el
+    renombrado y, si sigue fallando, se escribe directamente sobre el archivo final.
+    """
     ruta = Path(ruta)
-    ruta.parent.mkdir(parents=True, exist_ok=True)
-    temporal = ruta.with_suffix(".tmp")
-    temporal.write_text(json.dumps(estado, ensure_ascii=False, indent=2), encoding="utf-8")
-    temporal.replace(ruta)
+    texto = json.dumps(estado, ensure_ascii=False, indent=2)
+    try:
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        temporal = ruta.with_suffix(".tmp")
+        temporal.write_text(texto, encoding="utf-8")
+        for intento in range(5):
+            try:
+                temporal.replace(ruta)
+                return True
+            except PermissionError:
+                time.sleep(0.05 * (intento + 1))
+        ruta.write_text(texto, encoding="utf-8")   # plan B: sobrescribir en el sitio
+        temporal.unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False  # el estado es solo informativo; se reintenta en el siguiente ciclo
 
 
 def describir(fila: dict) -> str:
