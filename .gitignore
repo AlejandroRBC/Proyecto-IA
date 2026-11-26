@@ -24,3 +24,8 @@ PC2/registros/
 # Modelo de laboratorio (PC1): datos copiados de PC2 y reportes generados
 PC1/datos/laboratorio/
 PC1/reportes/laboratorio/
+
+# Archivos de bloqueo de LibreOffice/Word y log del panel
+.~lock.*#
+~$*
+PC1/streamlit_log.txt

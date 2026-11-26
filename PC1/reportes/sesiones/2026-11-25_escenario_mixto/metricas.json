@@ -11,5 +11,15 @@
   "recall": 0.3609967992684042,
   "fpr": 0.0,
   "recall_descargas_grandes": 0.96163215590743,
-  "fpr_descargas_pequenas": 0.0
+  "fpr_descargas_pequenas": 0.0,
+  "con_reglas": {
+    "verdaderos_positivos": 4315,
+    "falsos_positivos": 0,
+    "falsos_negativos": 98,
+    "verdaderos_negativos": 317,
+    "precision": 1.0,
+    "recall": 0.9777928846589622,
+    "fpr": 0.0
+  },
+  "incidentes": 7
 }

@@ -20,6 +20,7 @@ COLUMNAS_ALERTA = [
     "score",
     "umbral",
     "resultado",
+    "tipo_ataque",
 ]
 
 # Historial completo (todos los flujos evaluados, no solo las alertas).
@@ -36,6 +37,8 @@ COLUMNAS_HISTORIAL = [
     "score",
     "umbral",
     "resultado",
+    "tipo_ataque",
+    "id_incidente",
 ]
 
 
@@ -57,6 +60,16 @@ def registrar_flujo_analizado(ruta_csv: str | Path, info: dict) -> None:
     panel para mostrar conteos y la gráfica de puntajes.
     """
     _agregar_fila(ruta_csv, COLUMNAS_HISTORIAL, info)
+
+
+def registrar_incidente(ruta_csv: str | Path, info: dict) -> None:
+    """Agrega una actualización de un incidente (una fila por actualización, con ``id_incidente``).
+
+    El panel muestra la última fila de cada ``id_incidente``.
+    """
+    from src.clasificacion.reglas import COLUMNAS_INCIDENTE
+
+    _agregar_fila(ruta_csv, COLUMNAS_INCIDENTE, info)
 
 
 def _agregar_fila(ruta_csv: str | Path, columnas: list[str], info: dict) -> None:

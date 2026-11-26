@@ -6,7 +6,8 @@ QUÉ ES
 ------
 Sistema de detección de anomalías en tráfico de red con aprendizaje no supervisado
 (Isolation Forest), entrenado solo con tráfico normal y evaluado con CICIDS2017.
-No clasifica tipos de ataque, no asigna gravedad y no bloquea conexiones.
+Además clasifica los ataques (sección 13): reglas por ventana de tiempo e IP y un
+Random Forest de familias de CICIDS2017. No asigna gravedad ni bloquea conexiones.
 
 - PC1 (este directorio): modelo, detector, captura en vivo, panel Streamlit y análisis.
 - PC2 (../PC2): generador de tráfico de laboratorio hacia PC1, por consola.
@@ -217,12 +218,43 @@ de calibración del umbral.
 
 12. PRUEBAS
 -----------------------------------------------------------------------
-- PC1 (pytest desde PC1/): 69 pruebas, todas pasan. Limpieza, carga, log1p,
+- PC1 (pytest desde PC1/): 83 pruebas, todas pasan (14 nuevas de clasificación). Limpieza, carga, log1p,
   detector, alertas, panel, captura (flujos, conversión de paquetes en memoria,
   estado), modelo de laboratorio y análisis de sesiones. No usan la red ni los
   CSV reales.
 - PC2 (pytest desde PC2/): 110 pruebas, todas pasan. Configuración y límites de
   seguridad, nmap, registro, escenario mixto y aleatorio con red simulada.
+
+
+13. CLASIFICACIÓN DE ATAQUES  (HECHO, 25/11 noche)
+-----------------------------------------------------------------------
+Plan: PLAN_CLASIFICACION_ATAQUES.md. Resultados: reportes/clasificador/RESUMEN.md.
+- src/clasificacion/reglas.py: por cada IP atacante, los flujos de los últimos 10 s.
+    escaneo_puertos       >= 15 puertos distintos
+    rafaga_conexiones     >= 50 conexiones TCP cortas al mismo puerto
+    transferencia_masiva  descarga >= 20 KB marcada ANOMALO, o >= 5 MB en la ventana
+    anomalia_sin_clasificar / rf:<familia>  ANOMALO sin regla
+  Cada (IP, tipo) es un incidente; se cierra tras 30 s sin actividad. Los flujos "al
+  revés" se orientan por los puertos (servicio < 10000 <= cliente; PC2 usa puertos
+  13000-19000, no el rango 49152+ de Windows).
+- src/clasificacion/modelo_ataques.py + scripts/entrenar_clasificador_ataques.py:
+  Random Forest (200 árboles, class_weight balanced) con los 8 CSV, familias BENIGN,
+  DoS, DDoS, PortScan, Fuerza bruta, Ataque web y Bot (máx. 40.000 por familia; se
+  excluyen Infiltration y Heartbleed). Exactitud 99,4 %, F1 macro 0,975 en el 20 % de
+  prueba. La característica más importante es Destination Port (0,24).
+  En la sesión real del laboratorio llama BENIGN a las descargas grandes y a las
+  ráfagas: cambio de dominio. Por eso las reglas tienen prioridad.
+- Integración: capturar_en_vivo.py (--sin-clasificacion para desactivarla), columnas
+  tipo_ataque/id_incidente en el historial, datos/en_vivo/incidentes.csv, líneas
+  [INCIDENTE] en consola, panel ("Incidentes detectados" y métricas del Random Forest)
+  y analizar_sesion.py (sección "Clasificación de ataques").
+- Sesión real 25/11 (regenerada): descargas grandes 100 % transferencia masiva,
+  ráfaga 96,5 % (las primeras ~50 conexiones de cada ráfaga no llegan al umbral),
+  0 incidentes en el tráfico normal. Sistema completo: precision 100 %,
+  recall 97,8 % (antes 36,1 %), FPR 0 %.
+- Prueba en vivo por loopback (Npcap, 90 s): nmap -sT -p 1-300 -> incidente de
+  escaneo (288 puertos en 10 s); ráfaga -> incidente (reglas); descargas -> transferencia
+  masiva. Ningún incidente en las fases normales. Primera medición de nmap en vivo.
 
 
 CÓMO EJECUTAR (desde PC1/)
@@ -256,10 +288,10 @@ Para regenerar el modelo: python scripts/ejecutar_experimentos.py
 PENDIENTE
 -----------------------------------------------------------------------
 - Sesión real de 15-20 min para entrenar y medir el modelo de laboratorio.
-- Ráfagas y escaneos: se necesitan características por ventana de tiempo (p. ej.
-  conexiones o puertos distintos por IP de origen en los últimos N segundos).
-  Flujo a flujo se parecen al tráfico normal y ningún ajuste del umbral lo cambia.
+- Ráfagas y escaneos: RESUELTO con las reglas por ventana (sección 13).
+- Random Forest con datos del laboratorio (características por ventana + sesiones
+  etiquetadas por PC2) para que la parte de IA también funcione en nuestra red.
 - Decidir formalmente sobre log1p y, si se quiere, repetirlo con el criterio de
   duplicados corregido.
-- Escaneo con nmap: la sesión guardada no incluye ningún escaneo; falta medirlo
-  contra la captura en vivo y guardarlo con analizar_sesion.py.
+- Escaneo con nmap: medido en vivo solo por loopback (sección 13); falta repetirlo
+  con PC2 por Wi-Fi y guardarlo con analizar_sesion.py.

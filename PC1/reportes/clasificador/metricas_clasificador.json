@@ -1,0 +1,45 @@
+{
+  "fecha_entrenamiento": "2026-11-25T21:26:53",
+  "algoritmo": "RandomForestClassifier",
+  "caracteristicas": [
+    "Flow Duration",
+    "Total Fwd Packets",
+    "Total Backward Packets",
+    "Total Length of Fwd Packets",
+    "Total Length of Bwd Packets",
+    "Flow Bytes/s",
+    "Flow Packets/s",
+    "Flow IAT Mean",
+    "SYN Flag Count",
+    "Destination Port"
+  ],
+  "familias": [
+    "BENIGN",
+    "DoS",
+    "DDoS",
+    "PortScan",
+    "Fuerza bruta",
+    "Ataque web",
+    "Bot"
+  ],
+  "hiperparametros": {
+    "n_estimators": 200,
+    "class_weight": "balanced",
+    "min_samples_leaf": 2,
+    "random_state": 42
+  },
+  "max_por_familia": 40000,
+  "flujos_disponibles_por_familia": {
+    "BENIGN": 1957954,
+    "DoS": 186654,
+    "DDoS": 127186,
+    "PortScan": 90618,
+    "Fuerza bruta": 7406,
+    "Ataque web": 2097,
+    "Bot": 1931
+  },
+  "flujos_entrenamiento": 137147,
+  "flujos_prueba": 34287,
+  "exactitud": 0.9940502231166332,
+  "f1_macro": 0.9747402007086237
+}

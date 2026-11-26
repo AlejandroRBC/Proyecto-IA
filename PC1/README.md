@@ -439,6 +439,40 @@ cada flujo por separado, y lo anómalo de una ráfaga no es un flujo, sino **cu�
 llegan desde la misma IP en pocos segundos. Hay que repetir la medición con PC2 en la
 red real antes de sacar conclusiones.
 
+## Clasificación de ataques (`src/clasificacion/`)
+
+Isolation Forest dice «normal o anómalo» flujo a flujo. La clasificación añade **qué
+ataque es** y cubre el punto ciego de las ráfagas y los escaneos. Resultados completos en
+`reportes/clasificador/RESUMEN.md`.
+
+- **Reglas por ventana** (`reglas.py`, parámetros en `configuracion.yaml` → `clasificacion`):
+  por cada IP atacante se miran los flujos de los últimos 10 s.
+  `escaneo_puertos` si hay al menos 15 puertos distintos; `rafaga_conexiones` si hay al menos 50
+  conexiones TCP cortas al mismo puerto; `transferencia_masiva` si hay una descarga de al menos
+  20 KB marcada ANOMALO o al menos 5 MB en la ventana. Los flujos «al revés» (SYN perdido) se
+  orientan por los puertos. Cada (IP, tipo) es un **incidente** que se actualiza mientras dura
+  y se cierra tras 30 s sin actividad.
+- **Random Forest** (`modelo_ataques.py`): supervisado, con las mismas 10 características,
+  entrenado con los 8 CSV agrupados en familias (BENIGN, DoS, DDoS, PortScan, Fuerza bruta,
+  Ataque web, Bot). Solo se consulta para flujos ANOMALO sin regla (`rf:<familia>`).
+  ```powershell
+  python scripts/entrenar_clasificador_ataques.py   # ~45 s; modelos/clasificador/ + reportes/clasificador/
+  ```
+- **En vivo**: `capturar_en_vivo.py` carga las dos piezas sola (`--sin-clasificacion` las
+  desactiva). Añade `tipo_ataque` a cada flujo, escribe `datos/en_vivo/incidentes.csv` e imprime
+  `[INCIDENTE] ...`. El panel muestra «Incidentes detectados» y, en «Estado del modelo», las
+  métricas y la matriz del Random Forest.
+- **Sesiones**: `analizar_sesion.py` aplica las mismas reglas y añade la sección
+  «Clasificación de ataques» al `RESUMEN.md`.
+
+| Resultado | Valor |
+|---|---|
+| Random Forest en CICIDS2017 (20 % de prueba) | exactitud 99,4 %, F1 macro 0,975 |
+| Random Forest en la sesión real del laboratorio | llama BENIGN a los ataques (cambio de dominio) |
+| Reglas en la sesión real: descargas grandes / ráfaga | 100 % / 96,5 % clasificadas, 0 incidentes en el tráfico normal |
+| Sistema completo (modelo o reglas) en la sesión real | precision 100 %, recall 97,8 % (antes 36,1 %), FPR 0 % |
+| Prueba en vivo por loopback con `nmap -sT -p 1-300` | 1 incidente de escaneo (288 puertos), sin falsas alarmas |
+
 ## Reproducibilidad
 
 Todas las semillas están fijas (`random_state=42`). Correr el pipeline dos veces da
@@ -446,7 +480,6 @@ el mismo umbral y las mismas métricas. Solo cambia `fecha_entrenamiento` en los
 
 ## Pendiente (no incluido en esta tarea)
 
-- **Características por ventana de tiempo** (p. ej. conexiones y puertos distintos por
-  IP de origen en los últimos N segundos): lo que haría falta para detectar ráfagas y
-  escaneos, que flujo a flujo se parecen al tráfico normal.
+- **Random Forest con datos del laboratorio**: entrenarlo con características por ventana
+  y sesiones etiquetadas por PC2 para que la parte de IA también funcione en nuestra red.
 - **PC2** (generador de tráfico) está en `../PC2/`.

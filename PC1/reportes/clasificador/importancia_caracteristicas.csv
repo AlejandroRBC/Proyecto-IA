@@ -1,0 +1,11 @@
+caracteristica,importancia
+Destination Port,0.2411
+Total Length of Fwd Packets,0.1876
+Total Length of Bwd Packets,0.1263
+Flow Bytes/s,0.1032
+Total Backward Packets,0.0987
+Flow Duration,0.0865
+Total Fwd Packets,0.0575
+Flow Packets/s,0.0528
+Flow IAT Mean,0.0444
+SYN Flag Count,0.002

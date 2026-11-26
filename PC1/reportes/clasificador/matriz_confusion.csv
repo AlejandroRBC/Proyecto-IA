@@ -1,0 +1,8 @@
+real\predicha,BENIGN,DoS,DDoS,PortScan,Fuerza bruta,Ataque web,Bot
+BENIGN,7848,19,0,7,6,65,55
+DoS,17,7980,0,0,0,3,0
+DDoS,7,1,7992,0,0,0,0
+PortScan,2,8,0,7988,0,2,0
+Fuerza bruta,0,0,0,0,1480,1,0
+Ataque web,5,3,0,0,0,412,0
+Bot,3,0,0,0,0,0,383

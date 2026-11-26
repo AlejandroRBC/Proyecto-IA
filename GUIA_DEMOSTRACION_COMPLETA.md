@@ -13,6 +13,7 @@ panel de PC1 y guardar el resultado.
 
 ```
 Parte 1  Entrenar y evaluar el modelo            PC1
+Parte 1b Clasificador de ataques (Random Forest)  PC1
 Parte 2  Demo simulada con el dataset            PC1   (sin PC2, sin red)
 Parte 3  Preparar las dos máquinas               PC1 + PC2
 Parte 4  Demo en vivo: PC2 genera, PC1 detecta   PC1 + PC2
@@ -66,8 +67,37 @@ Si el modelo ya está entrenado, este paso se puede saltar y solo mostrar los re
 Opcional, comprobar que el código funciona (no usa la red ni el dataset):
 
 ```
-python -m pytest        # esperado: 69 pruebas pasan
+python -m pytest        # esperado: 83 pruebas pasan
 ```
+
+---
+
+## Parte 1b. Clasificador de familias de ataque (PC1)
+
+Isolation Forest solo dice «normal o anómalo». Para **nombrar** el ataque hay dos piezas
+(detalle y resultados en `PC1/reportes/clasificador/RESUMEN.md`):
+
+1. **Reglas por ventana de tiempo e IP**: miran juntos los flujos de cada IP en los últimos
+   10 s. Si hay 15 o más puertos distintos, es un escaneo de puertos; si hay 50 o más
+   conexiones cortas al mismo puerto, es una ráfaga (DoS); si hay descargas grandes y
+   anómalas, es una transferencia masiva. Cada ataque se agrupa en un **incidente**.
+2. **Random Forest** supervisado con los ataques etiquetados de CICIDS2017 (familias DoS,
+   DDoS, PortScan, Fuerza bruta, Ataque web y Bot):
+   ```
+   python scripts/entrenar_clasificador_ataques.py      # unos 45 s
+   ```
+
+| Resultado del Random Forest | Valor |
+|---|---|
+| Exactitud en CICIDS2017 (20 % de prueba) | 99,4 % |
+| F1 macro | 0,975 |
+| En el tráfico real del laboratorio | llama BENIGN a los ataques (cambio de dominio) |
+
+Mensaje clave: **dentro del dataset clasifica casi perfecto, pero aprendió de otra red**.
+En vivo mandan las reglas, medidas en el laboratorio. El Random Forest solo nombra
+anomalías que ninguna regla explica. Es un resultado honesto y vale la pena contarlo.
+
+La captura en vivo carga las dos piezas sola; con `--sin-clasificacion` se desactivan.
 
 ---
 
@@ -159,10 +189,10 @@ Opciones, en el orden recomendado para mostrar:
 | Paso | Opción | Qué responder | Qué debe verse en el panel de PC1 |
 |---|---|---|---|
 | 1 | **1** Tráfico normal | `s` a la descarga HTTP | Flujos **NORMAL** (ping y GET pequeños) |
-| 2 | **2** Escanear puertos | `s` a la confirmación (opcional) | Muchos flujos de un solo paquete: **NO_EVALUABLE** o NORMAL; el modelo no ve el escaneo |
-| 3 | **3** Ráfaga | Duración `10` y `s` | Cientos de flujos NORMAL: **no se detecta** |
-| 4 | **4** Escenario mixto | Enter (300 s) y `s` | 2 min normal → 1 min **alertas** → 2 min normal |
-| 5 | **5** Escenario aleatorio | Duración, semilla (Enter = al azar) y `s` | Normal continuo con **episodios de alertas** en momentos al azar |
+| 2 | **2** Escanear puertos | `s` a la confirmación | Flujos NORMAL para el modelo, pero aparece un incidente **«Escaneo de puertos»** (detectado por reglas) |
+| 3 | **3** Ráfaga | Duración `10` y `s` | Flujos NORMAL para el modelo, pero aparece un incidente **«Ráfaga de conexiones (DoS)»** |
+| 4 | **4** Escenario mixto | Enter (300 s) y `s` | 2 min normal → 1 min de **alertas e incidentes** (transferencia masiva + ráfaga) → 2 min normal |
+| 5 | **5** Escenario aleatorio | Duración, semilla (Enter = al azar) y `s` | Normal continuo con **episodios de incidentes** en momentos al azar |
 
 Antes de los pasos 2 a 5, PC2 muestra la IP destino y pide confirmación: comprobar que es
 la de PC1. En los pasos 4 y 5 además comprueba que PC1 sirve `grande.bin`; si no, se
@@ -173,9 +203,12 @@ detiene y dice qué hacer.
 - **Descargas grandes (fase anómala):** aparecen como **X rojas** bajo el umbral y llenan
   «Alertas en vivo». Son transferencias rápidas y voluminosas, algo raro frente a lo normal.
 - **Tráfico normal:** puntos azules sobre el umbral, sin alertas.
-- **Ráfaga y escaneo:** no generan alertas. Cada conexión suelta parece normal; lo anómalo
-  es **cuántas** llegan desde la misma IP en pocos segundos, y este modelo juzga cada flujo
-  por separado. Mismo resultado que PortScan y DoS en CICIDS2017 (Parte 1).
+- **Ráfaga y escaneo:** el modelo no los marca, porque cada conexión suelta parece normal
+  (igual que PortScan y DoS en CICIDS2017, Parte 1). Sí los detectan las **reglas por
+  ventana**, porque lo anómalo es **cuántas** conexiones llegan desde la misma IP en pocos
+  segundos. Mostrar la tabla **«Incidentes detectados»**: tipo de ataque, atacante,
+  duración, conexiones/s y la columna **«Detectado por»** (`reglas` = el modelo no lo veía).
+- **Consola de la captura:** cada ataque nuevo aparece como una línea `[INCIDENTE] ...`.
 - **Medidas de seguridad de PC2** (opcional mostrar): con `ip_destino_pc1: ""` se niega a
   ejecutar; con `"8.8.8.8"` rechaza la IP por ser pública; una ráfaga pedida de 120 s se
   recorta a 30 s.
@@ -185,12 +218,16 @@ misma ejecución (útil para volver a mostrarlo igual).
 
 ### 4.4 Resultado esperado (medido el 25/11/2026, Wi-Fi, modelo base)
 
-| Tráfico de PC2 | Marcados anómalos |
-|---|---|
-| Descarga pequeña (normal) | 0 % |
-| Ping | 0 % |
-| **Descarga grande (ataque simulado)** | **96 %** |
-| Ráfaga | 0 % |
+| Tráfico de PC2 | Marcados por el modelo | Clasificados por las reglas |
+|---|---|---|
+| Descarga pequeña (normal) | 0 % | 0 % (ningún incidente) |
+| Ping | 0 % | 0 % |
+| **Descarga grande (ataque simulado)** | **96 %** | **100 %** transferencia masiva |
+| **Ráfaga** | 0 % | **96,5 %** ráfaga de conexiones |
+
+Sistema completo (modelo o reglas): precision 100 %, recall 97,8 %, FPR 0 %. En una prueba
+en vivo por loopback, `nmap -sT -p 1-300` dio un incidente de **escaneo de puertos** (288
+puertos en 10 s) sin falsas alarmas en las fases normales.
 
 ---
 
@@ -213,7 +250,8 @@ Se crea `PC1/reportes/sesiones/mi_sesion/` con:
 
 | Archivo | Contenido |
 |---|---|
-| `RESUMEN.md` | Resultado por tipo de tráfico, lectura y gráfica |
+| `RESUMEN.md` | Resultado por tipo de tráfico, clasificación de ataques, lectura y gráfica |
+| `incidentes.csv`, `clasificacion_por_tipo.csv` | Incidentes de las reglas y cruce tipo de tráfico / tipo de ataque |
 | `puntajes.png` | Puntaje de cada flujo en el tiempo, con el umbral y los episodios |
 | `resumen_por_tipo.csv`, `resumen_por_tramo.csv` | Tablas |
 | `metricas.json` | Precision, recall, FPR |
@@ -273,9 +311,13 @@ la ráfaga. Esta parte no está medida con datos reales; mostrarla como el sigui
 1. El modelo se entrena solo con tráfico normal y marca lo que se aleja de él.
 2. Detecta bien las transferencias voluminosas (96 %) y no da falsos positivos con tráfico
    normal (0 %).
-3. No detecta ráfagas ni escaneos, porque juzga cada flujo por separado.
-4. Trabajo futuro: características por ventana de tiempo para cada IP (conexiones y puertos
-   distintos en los últimos segundos) y modelo entrenado con el tráfico del laboratorio.
+3. Solo no detecta ráfagas ni escaneos, porque juzga cada flujo por separado. Las reglas
+   por ventana de tiempo e IP cubren ese punto ciego y además **nombran el ataque**: el
+   recall del sistema sube de 36 % a 98 %, sin falsas alarmas.
+4. El Random Forest clasifica las familias de CICIDS2017 con un 99 % de exactitud, pero no
+   se generaliza a nuestra red: aprendió de otra red, y por eso mandan las reglas.
+5. Trabajo futuro: entrenar con tráfico del laboratorio (modelo de laboratorio y un Random
+   Forest con características por ventana) y validar en una red más grande.
 
 ---
 

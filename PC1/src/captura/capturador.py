@@ -1,7 +1,8 @@
 """Captura en vivo con scapy (requiere Npcap en Windows) y evaluación de cada flujo.
 
 Ciclo:  paquete (hilo de scapy) → cola → TablaFlujos → flujo cerrado →
-        detector (por lotes) → alertas.csv / flujos_analizados.csv / flujos_capturados.csv
+        detector (por lotes) → clasificador de ataques (reglas por ventana + Random Forest) →
+        alertas.csv / flujos_analizados.csv / flujos_capturados.csv / incidentes.csv
 
 El hilo de scapy solo convierte y encola paquetes. Todo lo demás corre en el
 hilo principal, una vez por segundo, así la tabla de flujos no necesita candados.
@@ -19,8 +20,14 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.alertas.gestor_alertas import procesar_resultado, registrar_flujo_analizado
+from src.alertas.gestor_alertas import (
+    _respaldar_si_cambio_encabezado,
+    procesar_resultado,
+    registrar_flujo_analizado,
+    registrar_incidente,
+)
 from src.captura.flujos import ICMP, TCP, UDP, Flujo, Paquete, TablaFlujos
+from src.clasificacion.reglas import describir_incidente
 from src.modelo.detector import ANOMALO, NO_EVALUABLE, evaluar_lote
 
 ORIGEN_CAPTURA = "captura_en_vivo"
@@ -33,7 +40,7 @@ COLUMNAS_FLUJOS_CAPTURADOS = [
     "Flow Duration", "Total Fwd Packets", "Total Backward Packets",
     "Total Length of Fwd Packets", "Total Length of Bwd Packets",
     "Flow Bytes/s", "Flow Packets/s", "Flow IAT Mean", "SYN Flag Count", "Destination Port",
-    "score", "umbral", "resultado",
+    "score", "umbral", "resultado", "tipo_ataque", "id_incidente", "familia_rf", "prob_rf",
 ]
 
 
@@ -120,6 +127,7 @@ def registrar_evaluados(evaluados: list[dict], rutas: dict) -> None:
         registrar_flujo_analizado(rutas["flujos_analizados"], fila)
     ruta = Path(rutas["flujos_capturados"])
     ruta.parent.mkdir(parents=True, exist_ok=True)
+    _respaldar_si_cambio_encabezado(ruta, COLUMNAS_FLUJOS_CAPTURADOS)
     nuevo = not ruta.exists() or ruta.stat().st_size == 0
     with open(ruta, "a", newline="", encoding="utf-8") as f:
         escritor = csv.DictWriter(f, fieldnames=COLUMNAS_FLUJOS_CAPTURADOS, extrasaction="ignore")
@@ -159,9 +167,10 @@ def escribir_estado(ruta: Path, estado: dict) -> bool:
 def describir(fila: dict) -> str:
     marca = {"ANOMALO": "[ANOMALO]", "NORMAL": "[NORMAL] ", NO_EVALUABLE: "[NO_EVAL]"}[fila["resultado"]]
     score = "   --   " if fila["score"] is None else f"{fila['score']:+.4f}"
+    tipo = f"  <{fila['tipo_ataque']}>" if fila.get("tipo_ataque") else ""
     return (f"{marca} score={score}  {fila['protocolo']:<4} {fila['ip_origen']}:{fila['puerto_origen']}"
             f" -> {fila['ip_destino']}:{fila['puerto_destino']}  paquetes="
-            f"{fila['Total Fwd Packets']}/{fila['Total Backward Packets']}  ({fila['motivo_cierre']})")
+            f"{fila['Total Fwd Packets']}/{fila['Total Backward Packets']}  ({fila['motivo_cierre']}){tipo}")
 
 
 def capturar(
@@ -173,6 +182,7 @@ def capturar(
     timeout_activo: float,
     duracion: float | None = None,
     mostrar_normales: bool = True,
+    clasificador=None,
 ) -> Counter:
     """Captura hasta Ctrl+C (o hasta ``duracion`` segundos). Devuelve el conteo de resultados."""
     # scapy.all registra todas las capas (Ethernet, IP...); sin eso no decodifica los paquetes.
@@ -193,15 +203,26 @@ def capturar(
         "filtro": filtro, "modelo": detector.get("nombre", "base"), "umbral": detector["umbral"],
         "paquetes": 0, "flujos_activos": 0, "flujos_evaluados": 0,
         "anomalos": 0, "no_evaluables": 0,
+        "clasificacion": clasificador is not None,
+        "random_forest": bool(clasificador is not None and clasificador.rf is not None),
+        "incidentes": 0, "incidentes_por_tipo": {},
     }
 
     def procesar(cerrados: list[Flujo]) -> None:
         evaluados = evaluar_flujos(detector, cerrados)
+        nuevos: list[dict] = []
+        if clasificador is not None and evaluados:
+            tocados, nuevos = clasificador.procesar(evaluados)
+            if "incidentes" in rutas:
+                for incidente in tocados:
+                    registrar_incidente(rutas["incidentes"], incidente)
         registrar_evaluados(evaluados, rutas)
         for fila in evaluados:
             conteo[fila["resultado"]] += 1
             if mostrar_normales or fila["resultado"] != "NORMAL":
                 print(describir(fila))
+        for incidente in nuevos:
+            print(describir_incidente(incidente))
 
     def actualizar_estado(activo: bool = True) -> None:
         estado.update(
@@ -209,6 +230,9 @@ def capturar(
             flujos_activos=len(tabla.activos), flujos_evaluados=sum(conteo.values()),
             anomalos=conteo[ANOMALO], no_evaluables=conteo[NO_EVALUABLE],
         )
+        if clasificador is not None:
+            estado.update(incidentes=clasificador.total_incidentes,
+                          incidentes_por_tipo=clasificador.conteo_por_tipo())
         escribir_estado(rutas["estado_captura"], estado)
 
     sniffer = AsyncSniffer(iface=interfaz, filter=filtro, prn=al_recibir, store=False)

@@ -158,3 +158,31 @@ def figura_sesion(df: pd.DataFrame, umbral: float, escenarios: pd.DataFrame | No
     fig.autofmt_xdate()
     fig.tight_layout()
     return fig
+
+
+def metricas_combinadas(df: pd.DataFrame) -> dict:
+    """Detección por flujo del sistema completo: modelo (ANOMALO) **o** una regla por ventana.
+
+    Esperado anómalo = los tipos que PC2 genera como ataque (descargas grandes y ráfaga).
+    """
+    from src.clasificacion.reglas import ESCANEO, RAFAGA, TRANSFERENCIA
+
+    esperado = df["tipo_trafico"].isin(TIPOS_ANOMALOS)
+    reglas = df.get("tipo_ataque", pd.Series("", index=df.index)).isin([ESCANEO, RAFAGA, TRANSFERENCIA])
+    marcado = (df["resultado"] == "ANOMALO") | reglas
+    vp, fp = int((esperado & marcado).sum()), int((~esperado & marcado).sum())
+    fn, vn = int((esperado & ~marcado).sum()), int((~esperado & ~marcado).sum())
+    return {
+        "verdaderos_positivos": vp, "falsos_positivos": fp, "falsos_negativos": fn, "verdaderos_negativos": vn,
+        "precision": vp / (vp + fp) if vp + fp else 0.0,
+        "recall": vp / (vp + fn) if vp + fn else 0.0,
+        "fpr": fp / (fp + vn) if fp + vn else 0.0,
+    }
+
+
+def cruce_trafico_ataque(df: pd.DataFrame) -> pd.DataFrame:
+    """Flujos por tipo de tráfico (filas) y tipo de ataque asignado (columnas)."""
+    tipo = df["tipo_ataque"].replace("", "(ninguno)").fillna("(ninguno)")
+    tabla = pd.crosstab(df["tipo_trafico"], tipo)
+    orden = [t for t in ORDEN_TIPOS if t in tabla.index]
+    return tabla.loc[orden].reset_index()

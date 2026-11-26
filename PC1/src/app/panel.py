@@ -167,6 +167,25 @@ def seccion_en_vivo() -> None:
               help="Flujos de un solo paquete (duración 0): sus tasas por segundo son infinitas, "
                    "igual que en el dataset, y el modelo no los evalúa.")
 
+    if estado and estado.get("clasificacion") is False:
+        st.caption("La clasificación de ataques está desactivada en esta captura (--sin-clasificacion).")
+    incidentes_csv, _ = dp.leer_csv(config["rutas"]["incidentes"])
+    ultimos = dp.ultimos_incidentes(incidentes_csv)
+    st.subheader(f"Incidentes detectados ({len(ultimos):,})")
+    conteo_inc = dp.conteo_incidentes(ultimos)
+    columnas_inc = st.columns(len(dp.GRUPOS_INCIDENTE))
+    for col, (clave, nombre) in zip(columnas_inc, dp.GRUPOS_INCIDENTE):
+        col.metric(nombre, conteo_inc[clave])
+    if ultimos.empty:
+        st.caption("Ningún incidente todavía. Las reglas por ventana agrupan el tráfico de cada IP en "
+                   "los últimos segundos: muchas conexiones al mismo puerto = ráfaga, muchos puertos "
+                   "distintos = escaneo, descargas grandes anómalas = transferencia masiva.")
+    else:
+        st.dataframe(dp.tabla_incidentes(ultimos).head(50), hide_index=True, width="stretch")
+        st.caption("Un incidente agrupa todos los flujos de un mismo ataque desde la misma IP; se cierra "
+                   "tras 30 s sin actividad. «reglas» = detectado solo por las reglas por ventana (el "
+                   "modelo veía cada flujo como normal); «modelo + reglas» = también por Isolation Forest.")
+
     recientes = vivo.tail(300)
     umbral_vivo = dp.umbral_en_vivo(recientes, umbral)
     if umbral_vivo is not None and not dp.puntajes(recientes).empty:
@@ -233,6 +252,32 @@ st.info(
     "grupos densos de flujos parecidos entre sí, e Isolation Forest no los aísla como raros. Es una "
     "limitación estructural del enfoque, no un error de calibración del umbral."
 )
+
+st.subheader("Clasificador de familias de ataque (Random Forest, CICIDS2017)")
+clasif = dp.leer_resultados_clasificador(config)
+if "metricas" not in clasif:
+    st.caption("Todavía no se entrenó: `python scripts/entrenar_clasificador_ataques.py`.")
+else:
+    mc = clasif["metricas"]
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Exactitud (prueba)", f"{mc['exactitud']:.1%}")
+    c2.metric("F1 macro", f"{mc['f1_macro']:.3f}")
+    c3.metric("Flujos de entrenamiento", f"{mc['flujos_entrenamiento']:,}")
+    izquierda, derecha = st.columns([3, 2])
+    with izquierda:
+        if clasif.get("reporte") is not None:
+            st.dataframe(clasif["reporte"].round(3), hide_index=True, width="stretch")
+    with derecha:
+        if clasif.get("matriz") is not None:
+            st.image(str(clasif["matriz"]), width="stretch")
+    st.caption("Supervisado, con las mismas 10 características. La prueba es otro 20 % del mismo dataset, "
+               "así que mide la separación de familias dentro de CICIDS2017.")
+    if clasif.get("sesion") is not None:
+        st.markdown("**Aplicado a la sesión real del laboratorio** (familia asignada por tipo de tráfico):")
+        st.dataframe(clasif["sesion"], hide_index=True, width="stretch")
+        st.warning("**Cambio de dominio.** En el laboratorio el Random Forest llama BENIGN a las descargas "
+                   "masivas y a las ráfagas: aprendió de otra red. Por eso en vivo mandan las reglas por "
+                   "ventana, y el Random Forest solo nombra anomalías que ninguna regla explica.")
 
 st.subheader("Modelo de laboratorio")
 metricas_lab, _ = dp.leer_csv(config["rutas"]["reportes_laboratorio"] / "metricas.csv")

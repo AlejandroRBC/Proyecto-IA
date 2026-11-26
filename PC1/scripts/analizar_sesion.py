@@ -29,10 +29,13 @@ from src.analisis.sesion import (  # noqa: E402
     asignar_tramos,
     cargar_sesion,
     clasificar_trafico,
+    cruce_trafico_ataque,
     figura_sesion,
+    metricas_combinadas,
     metricas_globales,
     resumir,
 )
+from src.clasificacion.reglas import clasificar_dataframe, nombre_tipo  # noqa: E402
 from src.modelo.laboratorio import cargar_escenarios_pc2  # noqa: E402
 from src.procesamiento.dataset import cargar_configuracion  # noqa: E402
 
@@ -67,6 +70,9 @@ def main() -> None:
                                 & (escenarios["fecha_hora_inicio"] <= df["inicio"].max())]
     df["tipo_trafico"] = clasificar_trafico(df, args.puerto_http, args.puerto_rafaga)
     df["tramo_pc2"] = asignar_tramos(df, escenarios)
+    # Reglas por ventana sobre la sesión (mismo código que en vivo).
+    clasificados, incidentes = clasificar_dataframe(df, config.get("clasificacion"))
+    df["tipo_ataque"], df["id_incidente"] = clasificados["tipo_ataque"], clasificados["id_incidente"]
 
     nombre = args.nombre or df["inicio"].min().strftime("%Y-%m-%d_%H%M")
     carpeta = config["rutas"]["reportes"] / "sesiones" / nombre
@@ -75,15 +81,20 @@ def main() -> None:
 
     por_tipo = resumir(df, "tipo_trafico")
     metricas = metricas_globales(df)
+    combinadas = metricas_combinadas(df)
+    cruce = cruce_trafico_ataque(df)
     df.drop(columns=["inicio"]).to_csv(carpeta / "flujos.csv", index=False)
     por_tipo.to_csv(carpeta / "resumen_por_tipo.csv", index=False)
+    incidentes.to_csv(carpeta / "incidentes.csv", index=False)
+    cruce.to_csv(carpeta / "clasificacion_por_tipo.csv", index=False)
     por_tramo = None
     if escenarios is not None and not escenarios.empty:
         shutil.copy(args.escenarios_pc2, carpeta / "escenarios_pc2.csv")
         por_tramo = resumir(df[df["tramo_pc2"] != ""], "tramo_pc2")
         por_tramo.to_csv(carpeta / "resumen_por_tramo.csv", index=False)
     with open(carpeta / "metricas.json", "w", encoding="utf-8") as f:
-        json.dump({"umbral": umbral, "ip_pc2": args.ip_pc2, **metricas}, f, ensure_ascii=False, indent=2)
+        json.dump({"umbral": umbral, "ip_pc2": args.ip_pc2, **metricas,
+                   "con_reglas": combinadas, "incidentes": int(len(incidentes))}, f, ensure_ascii=False, indent=2)
     fig = figura_sesion(df, umbral, escenarios)
     fig.savefig(carpeta / "puntajes.png", dpi=130)
     plt.close(fig)
@@ -120,6 +131,32 @@ Cada flujo se clasifica por su forma (puerto y bytes), no por la hora.
   (VP {metricas['verdaderos_positivos']:,}, FP {metricas['falsos_positivos']:,},
   FN {metricas['falsos_negativos']:,}, VN {metricas['verdaderos_negativos']:,}).
 """
+    tabla_incidentes = "(ninguno)"
+    if len(incidentes):
+        vista = incidentes.assign(tipo_ataque=incidentes["tipo_ataque"].map(nombre_tipo),
+                                  inicio=incidentes["inicio"].str[11:19])
+        tabla_incidentes = tabla_md(vista[["tipo_ataque", "ip_atacante", "inicio", "duracion_segundos",
+                                           "flujos", "detectado_por", "detalle"]], {})
+    minimo_rafaga = (config.get("clasificacion") or {}).get("min_conexiones_rafaga", 50)
+    texto += f"""
+## Clasificación de ataques (reglas por ventana)
+
+Las reglas miran juntos los flujos de cada IP en los últimos segundos (ver
+`src/clasificacion/reglas.py`). Flujos por tipo de tráfico y tipo de ataque asignado:
+
+{tabla_md(cruce, {})}
+
+Incidentes detectados: **{len(incidentes)}**
+
+{tabla_incidentes}
+
+Sistema completo (modelo **o** reglas), con descargas grandes + ráfaga como ataque:
+precision {pct(combinadas['precision'])}, recall {pct(combinadas['recall'])}, FPR {pct(combinadas['fpr'])}
+(VP {combinadas['verdaderos_positivos']:,}, FP {combinadas['falsos_positivos']:,},
+FN {combinadas['falsos_negativos']:,}, VN {combinadas['verdaderos_negativos']:,}).
+Las primeras conexiones de cada ráfaga no se marcan: la regla necesita acumular
+{minimo_rafaga} en la ventana.
+"""
     if por_tramo is not None:
         texto += f"""
 ## Resultado por tramo de PC2
@@ -142,7 +179,7 @@ Cada punto es un flujo; las X son los marcados como anómalos. """ + (
 
 `flujos.csv` (flujos de la sesión con `tipo_trafico`), `resumen_por_tipo.csv`, """ + (
         "`resumen_por_tramo.csv`, `escenarios_pc2.csv`, " if por_tramo is not None else "") + \
-        "`metricas.json` y `puntajes.png`.\n"
+        "`incidentes.csv`, `clasificacion_por_tipo.csv`, `metricas.json` y `puntajes.png`.\n"
     (carpeta / "RESUMEN.md").write_text(texto, encoding="utf-8")
 
     print(por_tipo.to_string(index=False))

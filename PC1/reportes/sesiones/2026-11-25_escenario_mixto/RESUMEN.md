@@ -1,6 +1,6 @@
 # Sesión 2026-11-25_escenario_mixto
 
-Generado el 2026-11-25 16:58 por `scripts/analizar_sesion.py`.
+Generado el 2026-11-25 21:29 por `scripts/analizar_sesion.py`.
 
 - Flujos de PC2 (192.168.1.10) capturados en PC1: **4,730**, del
   2026-11-25 16:40:26 al 16:57:25 (reloj de PC1).
@@ -30,6 +30,38 @@ Cada flujo se clasifica por su forma (puerto y bytes), no por la hora.
   (VP 1,579, FP 0,
   FN 2,795, VN 313).
 
+## Clasificación de ataques (reglas por ventana)
+
+Las reglas miran juntos los flujos de cada IP en los últimos segundos (ver
+`src/clasificacion/reglas.py`). Flujos por tipo de tráfico y tipo de ataque asignado:
+
+| tipo_trafico | (ninguno) | rafaga_conexiones | transferencia_masiva |
+|---|---|---|---|
+| descarga pequeña | 297 | 0 | 0 |
+| ping | 5 | 0 | 0 |
+| otro | 15 | 0 | 0 |
+| descarga grande | 0 | 0 | 1642 |
+| ráfaga | 98 | 2673 | 0 |
+
+Incidentes detectados: **7**
+
+| tipo_ataque | ip_atacante | inicio | duracion_segundos | flujos | detectado_por | detalle |
+|---|---|---|---|---|---|---|
+| Transferencia masiva | 192.168.1.10 | 16:40:43 | 0.0 | 1 | modelo + reglas | 0.3 MB transferidos en 1 flujos |
+| Transferencia masiva | 192.168.1.10 | 16:46:53 | 93.4 | 999 | modelo + reglas | 236.0 MB transferidos en 999 flujos |
+| Ráfaga de conexiones (DoS) | 192.168.1.10 | 16:46:56 | 90.4 | 1671 | reglas | hasta 20 conexiones/s al puerto 8080 |
+| Transferencia masiva | 192.168.1.10 | 16:49:42 | 0.0 | 1 | modelo + reglas | 0.3 MB transferidos en 1 flujos |
+| Transferencia masiva | 192.168.1.10 | 16:51:44 | 60.0 | 640 | modelo + reglas | 148.5 MB transferidos en 640 flujos |
+| Ráfaga de conexiones (DoS) | 192.168.1.10 | 16:51:47 | 57.2 | 1002 | reglas | hasta 19 conexiones/s al puerto 8080 |
+| Transferencia masiva | 192.168.1.10 | 16:57:25 | 0.0 | 1 | modelo + reglas | 0.3 MB transferidos en 1 flujos |
+
+Sistema completo (modelo **o** reglas), con descargas grandes + ráfaga como ataque:
+precision 100.0%, recall 97.8%, FPR 0.0%
+(VP 4,315, FP 0,
+FN 98, VN 317).
+Las primeras conexiones de cada ráfaga no se marcan: la regla necesita acumular
+50 en la ventana.
+
 ## Gráfica
 
 ![Puntaje de cada flujo en el tiempo](puntajes.png)
@@ -38,4 +70,4 @@ Cada punto es un flujo; las X son los marcados como anómalos. Sin el CSV de PC2
 
 ## Archivos
 
-`flujos.csv` (flujos de la sesión con `tipo_trafico`), `resumen_por_tipo.csv`, `metricas.json` y `puntajes.png`.
+`flujos.csv` (flujos de la sesión con `tipo_trafico`), `resumen_por_tipo.csv`, `incidentes.csv`, `clasificacion_por_tipo.csv`, `metricas.json` y `puntajes.png`.

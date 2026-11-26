@@ -110,11 +110,11 @@ def tiempo_limite(filas: int, intervalo: float) -> int:
 
 
 def borrar_historial(config: dict) -> list[str]:
-    """Borra alertas.csv y flujos_analizados.csv. Devuelve los nombres borrados."""
+    """Borra alertas.csv, flujos_analizados.csv e incidentes.csv. Devuelve los nombres borrados."""
     borrados = []
-    for clave in ("alertas", "flujos_analizados"):
-        ruta = config["rutas"][clave]
-        if ruta.exists():
+    for clave in ("alertas", "flujos_analizados", "incidentes"):
+        ruta = config["rutas"].get(clave)
+        if ruta is not None and ruta.exists():
             ruta.unlink()
             borrados.append(ruta.name)
     return borrados
@@ -205,7 +205,7 @@ def figura_puntajes(
 # ---------------------------------------------------------------------------
 ORIGEN_CAPTURA = "captura_en_vivo"
 COLUMNAS_VIVO = ["fecha_hora", "ip_origen", "puerto_origen", "ip_destino", "puerto_destino",
-                 "score", "resultado"]
+                 "score", "resultado", "tipo_ataque"]
 
 
 def leer_estado_captura(ruta: Path) -> dict | None:
@@ -284,3 +284,65 @@ def tabla_por_tipo_laboratorio(por_tipo: pd.DataFrame) -> pd.DataFrame:
     tabla = flujos.merge(tabla, on="Label").rename(columns={"Label": "Tipo"})
     tabla.columns.name = None
     return tabla.sort_values("Flujos", ascending=False).reset_index(drop=True)
+
+
+# ---------------------------------------------------------------------------
+# Clasificación de ataques (incidentes.csv y reportes/clasificador/)
+# ---------------------------------------------------------------------------
+GRUPOS_INCIDENTE = [("escaneo_puertos", "Escaneos de puertos"), ("rafaga_conexiones", "Ráfagas (DoS)"),
+                    ("transferencia_masiva", "Transferencias masivas"), ("otros", "Otras anomalías")]
+
+
+def ultimos_incidentes(incidentes: pd.DataFrame | None) -> pd.DataFrame:
+    """Última actualización de cada incidente, el más reciente primero."""
+    if incidentes is None or incidentes.empty or "id_incidente" not in incidentes.columns:
+        return pd.DataFrame()
+    ultimos = incidentes.drop_duplicates("id_incidente", keep="last")
+    return ultimos.sort_values("ultimo", ascending=False).reset_index(drop=True)
+
+
+def conteo_incidentes(ultimos: pd.DataFrame) -> dict:
+    """Incidentes por grupo (escaneo, ráfaga, transferencia, otros)."""
+    conteo = {clave: 0 for clave, _ in GRUPOS_INCIDENTE}
+    if ultimos.empty:
+        return conteo
+    for tipo in ultimos["tipo_ataque"].astype(str):
+        conteo[tipo if tipo in conteo else "otros"] += 1
+    return conteo
+
+
+def tabla_incidentes(ultimos: pd.DataFrame) -> pd.DataFrame:
+    """Incidentes con nombres legibles para el panel."""
+    from src.clasificacion.reglas import nombre_tipo
+
+    if ultimos.empty:
+        return pd.DataFrame()
+    tabla = pd.DataFrame({
+        "Tipo de ataque": ultimos["tipo_ataque"].astype(str).map(nombre_tipo),
+        "Atacante": ultimos["ip_atacante"],
+        "Víctima": ultimos["ip_victima"],
+        "Inicio": ultimos["inicio"].astype(str).str[11:19],
+        "Duración (s)": ultimos["duracion_segundos"],
+        "Flujos": ultimos["flujos"],
+        "Puertos": ultimos["puertos_distintos"],
+        "Conexiones/s": ultimos["conexiones_por_segundo"],
+        "Detectado por": ultimos["detectado_por"],
+        "Detalle": ultimos["detalle"],
+    })
+    return tabla
+
+
+def leer_resultados_clasificador(config: dict) -> dict:
+    """Métricas, reporte por familia, matriz y aplicación a la sesión real (lo que exista)."""
+    carpeta = Path(config["rutas"]["reportes_clasificador"])
+    salida: dict = {"carpeta": carpeta}
+    try:
+        with open(carpeta / "metricas_clasificador.json", encoding="utf-8") as f:
+            salida["metricas"] = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return salida
+    salida["reporte"], _ = leer_csv(carpeta / "reporte_clasificacion.csv")
+    salida["sesion"], _ = leer_csv(carpeta / "sesion_laboratorio.csv")
+    matriz = carpeta / "matriz_confusion.png"
+    salida["matriz"] = matriz if matriz.exists() else None
+    return salida

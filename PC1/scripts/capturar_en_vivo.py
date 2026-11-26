@@ -11,6 +11,7 @@ Ejemplos (desde PC1/):
     python scripts/capturar_en_vivo.py --listar-interfaces
     python scripts/capturar_en_vivo.py --duracion 60 --solo-alertas
     python scripts/capturar_en_vivo.py --modelo laboratorio   # usar el modelo de laboratorio
+    python scripts/capturar_en_vivo.py --sin-clasificacion    # sin reglas ni Random Forest
     python scripts/capturar_en_vivo.py --todo-el-trafico --archivo-flujos datos/laboratorio/sesion1.csv
 
 Mientras corre, el panel (streamlit run src/app/panel.py) muestra los flujos en
@@ -26,6 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.captura.capturador import capturar, construir_filtro  # noqa: E402
+from src.clasificacion.clasificador import ClasificadorAtaques  # noqa: E402
 from src.modelo.detector import MODELOS_DISPONIBLES, cargar_detector  # noqa: E402
 from src.procesamiento.dataset import cargar_configuracion  # noqa: E402
 
@@ -46,6 +48,8 @@ def leer_argumentos(captura: dict) -> argparse.Namespace:
     p.add_argument("--archivo-flujos", default=None,
                    help="Guardar las características de los flujos en este CSV en vez de "
                         "rutas.flujos_capturados (útil para separar sesiones de captura).")
+    p.add_argument("--sin-clasificacion", action="store_true",
+                   help="No clasificar ataques (sin reglas por ventana ni Random Forest).")
     p.add_argument("--listar-interfaces", action="store_true", help="Mostrar interfaces y salir.")
     return p.parse_args()
 
@@ -81,6 +85,16 @@ def main() -> None:
     if args.archivo_flujos:
         rutas["flujos_capturados"] = Path(args.archivo_flujos).resolve()
     print(f"Detector '{args.modelo}' cargado | umbral = {detector['umbral']:.6f}")
+    clasificador = None
+    if not args.sin_clasificacion:
+        clasificador = ClasificadorAtaques(config)
+        p = clasificador.ventana.p
+        print(f"Clasificación de ataques: reglas por ventana de {p['ventana_segundos']} s "
+              f"(escaneo >= {p['min_puertos_escaneo']} puertos, ráfaga >= {p['min_conexiones_rafaga']} "
+              f"conexiones) | Random Forest: "
+              + ("cargado" if clasificador.rf is not None else
+                 "no entrenado (python scripts/entrenar_clasificador_ataques.py)"))
+        print(f"Incidentes en: {rutas['incidentes']}")
     print(f"Características de los flujos en: {rutas['flujos_capturados']}")
     print(f"Interfaz: {args.interfaz or '(predeterminada)'} | filtro: {filtro}")
     print("Capturando... (Ctrl+C para detener)\n")
@@ -91,6 +105,7 @@ def main() -> None:
             timeout_inactividad=float(captura.get("timeout_inactividad_segundos", 5)),
             timeout_activo=float(captura.get("timeout_activo_segundos", 120)),
             duracion=args.duracion, mostrar_normales=not args.solo_alertas,
+            clasificador=clasificador,
         )
     except (RuntimeError, OSError, ValueError) as e:
         sys.exit(f"Error en la captura: {e}")
@@ -100,6 +115,10 @@ def main() -> None:
     print(f"  Normales:         {conteo['NORMAL']}")
     print(f"  Anómalos:         {conteo['ANOMALO']}")
     print(f"  No evaluables:    {conteo['NO_EVALUABLE']}")
+    if clasificador is not None:
+        print(f"  Incidentes:       {clasificador.total_incidentes}")
+        for tipo, n in sorted(clasificador.conteo_por_tipo().items()):
+            print(f"    {tipo:<28} {n}")
 
 
 if __name__ == "__main__":

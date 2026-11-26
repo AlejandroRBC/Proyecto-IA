@@ -1,0 +1,8 @@
+fecha_hora,id_incidente,tipo_ataque,ip_atacante,ip_victima,inicio,ultimo,duracion_segundos,flujos,flujos_anomalos_modelo,puertos_distintos,conexiones_por_segundo,bytes_servidor,detectado_por,detalle
+2026-11-25T21:31:04.793,escaneo_puertos-127.0.0.1-20261125-213104,escaneo_puertos,127.0.0.1,127.0.0.1,2026-11-25T21:31:04.423,2026-11-25T21:31:04.443,0.0,180,0,180,0.0,0,reglas,180 puertos distintos sondeados
+2026-11-25T21:31:11.527,escaneo_puertos-127.0.0.1-20261125-213104,escaneo_puertos,127.0.0.1,127.0.0.1,2026-11-25T21:31:04.423,2026-11-25T21:31:10.500,6.1,291,0,287,0.0,1015,reglas,287 puertos distintos sondeados
+2026-11-25T21:31:26.353,escaneo_puertos-127.0.0.1-20261125-213104,escaneo_puertos,127.0.0.1,127.0.0.1,2026-11-25T21:31:04.423,2026-11-25T21:31:14.445,10.0,343,18,288,0.0,7988209,modelo + reglas,288 puertos distintos sondeados
+2026-11-25T21:31:26.353,transferencia_masiva-127.0.0.1-20261125-213114,transferencia_masiva,127.0.0.1,127.0.0.1,2026-11-25T21:31:14.460,2026-11-25T21:31:21.731,7.3,176,90,1,0.0,36155769,modelo + reglas,36.2 MB transferidos en 176 flujos
+2026-11-25T21:31:26.354,rafaga_conexiones-127.0.0.1-20261125-213118,rafaga_conexiones,127.0.0.1,127.0.0.1,2026-11-25T21:31:18.162,2026-11-25T21:31:21.727,3.6,39,0,1,8.8,0,reglas,hasta 9 conexiones/s al puerto 8080
+2026-11-25T21:31:42.128,transferencia_masiva-127.0.0.1-20261125-213114,transferencia_masiva,127.0.0.1,127.0.0.1,2026-11-25T21:31:14.460,2026-11-25T21:31:28.525,14.1,677,277,1,0.0,131561087,modelo + reglas,131.6 MB transferidos en 677 flujos
+2026-11-25T21:31:42.128,rafaga_conexiones-127.0.0.1-20261125-213118,rafaga_conexiones,127.0.0.1,127.0.0.1,2026-11-25T21:31:18.162,2026-11-25T21:31:28.396,10.2,122,0,1,12.0,0,reglas,hasta 12 conexiones/s al puerto 8080

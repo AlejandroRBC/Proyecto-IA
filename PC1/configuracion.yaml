@@ -19,6 +19,10 @@ rutas:
   # Experimento log1p: rutas separadas para no sobrescribir el modelo base.
   modelos_log1p: modelos/log1p
   reportes_log1p: reportes/log1p
+  # Clasificación de ataques (src/clasificacion/)
+  incidentes: datos/en_vivo/incidentes.csv
+  modelos_clasificador: modelos/clasificador
+  reportes_clasificador: reportes/clasificador
 
 datos:
   # Si la lectura falla con UnicodeDecodeError, cambiar a "latin1".
@@ -90,6 +94,18 @@ laboratorio:
   tolerancia_segundos: 5
   tipos_ataque: [escaneo_puertos, rafaga_conexiones, mixto_anomalo]   # mixto_anomalo = fase anómala del escenario mixto de PC2
   min_flujos_normales: 200          # por debajo de esto no se entrena (muy pocos datos)
+
+# Clasificación de ataques: reglas por ventana de tiempo e IP (src/clasificacion/reglas.py)
+# y Random Forest de familias de CICIDS2017 (scripts/entrenar_clasificador_ataques.py).
+clasificacion:
+  ventana_segundos: 10                 # flujos de cada IP que se miran juntos
+  min_puertos_escaneo: 15              # puertos distintos en la ventana -> escaneo_puertos
+  min_conexiones_rafaga: 50            # conexiones TCP cortas al mismo puerto -> rafaga_conexiones
+  bytes_transferencia_masiva: 20000    # bytes del servidor en un flujo para considerarlo "grande"
+  bytes_ventana_masiva: 5000000        # o bytes acumulados en la ventana -> transferencia_masiva
+  inactividad_incidente_segundos: 30   # sin actividad este tiempo, el incidente se da por cerrado
+  usar_random_forest: true             # nombra la familia de los ANOMALO sin regla (si está entrenado)
+  probabilidad_minima_rf: 0.5          # por debajo, se queda como anomalia_sin_clasificar
 
 archivos_salida:
   modelo: isolation_forest.joblib
